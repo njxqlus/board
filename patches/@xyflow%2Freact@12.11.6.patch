@@ -1,0 +1,96 @@
+diff --git a/dist/esm/index.js b/dist/esm/index.js
+index 422889fc98ea26cf4c4b45d6d7b84479550f4728..024eabfdb684ce05c317362173d0adaa2ea60fc6 100644
+--- a/dist/esm/index.js
++++ b/dist/esm/index.js
+@@ -2150,8 +2150,11 @@ function useResizeObserver() {
+         if (typeof ResizeObserver === 'undefined') {
+             return null;
+         }
+-        return new ResizeObserver((entries) => {
+-            const updates = new Map();
++        // Deliver measurements after paint: synchronous store subscribers can
++        // change layout while ResizeObserver is still delivering notifications.
++        const updates = new Map();
++        let frame = 0;
++        const observer = new ResizeObserver((entries) => {
+             entries.forEach((entry) => {
+                 const id = entry.target.getAttribute('data-id');
+                 updates.set(id, {
+@@ -2160,8 +2163,28 @@ function useResizeObserver() {
+                     force: true,
+                 });
+             });
+-            updateNodeInternals(updates);
++            if (!frame) {
++                frame = requestAnimationFrame(() => {
++                    frame = 0;
++                    const batch = new Map(updates);
++                    updates.clear();
++                    updateNodeInternals(batch);
++                });
++            }
+         });
++        const disconnect = observer.disconnect.bind(observer);
++        observer.disconnect = () => {
++            disconnect();
++            cancelAnimationFrame(frame);
++            frame = 0;
++            updates.clear();
++        };
++        const unobserve = observer.unobserve.bind(observer);
++        observer.unobserve = (target) => {
++            unobserve(target);
++            updates.delete(target.getAttribute('data-id'));
++        };
++        return observer;
+     });
+     useEffect(() => {
+         return () => {
+diff --git a/dist/esm/index.mjs b/dist/esm/index.mjs
+index 422889fc98ea26cf4c4b45d6d7b84479550f4728..024eabfdb684ce05c317362173d0adaa2ea60fc6 100644
+--- a/dist/esm/index.mjs
++++ b/dist/esm/index.mjs
+@@ -2150,8 +2150,11 @@ function useResizeObserver() {
+         if (typeof ResizeObserver === 'undefined') {
+             return null;
+         }
+-        return new ResizeObserver((entries) => {
+-            const updates = new Map();
++        // Deliver measurements after paint: synchronous store subscribers can
++        // change layout while ResizeObserver is still delivering notifications.
++        const updates = new Map();
++        let frame = 0;
++        const observer = new ResizeObserver((entries) => {
+             entries.forEach((entry) => {
+                 const id = entry.target.getAttribute('data-id');
+                 updates.set(id, {
+@@ -2160,8 +2163,28 @@ function useResizeObserver() {
+                     force: true,
+                 });
+             });
+-            updateNodeInternals(updates);
++            if (!frame) {
++                frame = requestAnimationFrame(() => {
++                    frame = 0;
++                    const batch = new Map(updates);
++                    updates.clear();
++                    updateNodeInternals(batch);
++                });
++            }
+         });
++        const disconnect = observer.disconnect.bind(observer);
++        observer.disconnect = () => {
++            disconnect();
++            cancelAnimationFrame(frame);
++            frame = 0;
++            updates.clear();
++        };
++        const unobserve = observer.unobserve.bind(observer);
++        observer.unobserve = (target) => {
++            unobserve(target);
++            updates.delete(target.getAttribute('data-id'));
++        };
++        return observer;
+     });
+     useEffect(() => {
+         return () => {

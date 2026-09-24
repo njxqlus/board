@@ -22,25 +22,27 @@ async function promptPassword() {
 			output.write("\n");
 		};
 
-		const onData = (character: string) => {
-			if (character === "\r" || character === "\n") {
-				finish();
-				resolve(password);
-				return;
-			}
+		const onData = (chunk: string) => {
+			for (const character of chunk) {
+				if (character === "\r" || character === "\n") {
+					finish();
+					resolve(password);
+					return;
+				}
 
-			if (character === "\u0003") {
-				finish();
-				reject(new Error("Cancelled."));
-				return;
-			}
+				if (character === "\u0003") {
+					finish();
+					reject(new Error("Cancelled."));
+					return;
+				}
 
-			if (character === "\u007f") {
-				password = password.slice(0, -1);
-				return;
-			}
+				if (character === "\u007f") {
+					password = password.slice(0, -1);
+					continue;
+				}
 
-			password += character;
+				password += character;
+			}
 		};
 
 		input.on("data", onData);

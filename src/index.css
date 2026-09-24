@@ -1,51 +1,404 @@
 @import "../styles/globals.css";
 
 @layer base {
-  :root {
-    @apply font-sans;
-  }
+	:root {
+		@apply font-sans;
+	}
 
-  body {
-    @apply grid place-items-center min-w-[320px] min-h-screen relative m-0 bg-background text-foreground;
-  }
+	body {
+		@apply min-h-screen min-w-[320px] bg-background text-foreground;
+	}
 }
 
 /* cool Bun background animation 😎 */
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  opacity: 0.05;
-  background: url("./logo.svg");
-  background-size: 256px;
-  transform: rotate(-12deg) scale(1.35);
-  animation: slide 30s linear infinite;
-  pointer-events: none;
+#root {
+	min-height: 100vh;
+}
+
+.board-workspace {
+	--board-map-mask: #94a3b833;
+}
+.board-workspace .react-flow__minimap {
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	overflow: hidden;
+}
+.board-workspace .react-flow__handle {
+	z-index: 3;
+	width: 12px;
+	height: 12px;
+	background: #64748b;
+	border: 2px solid var(--card);
+	opacity: 0;
+}
+.board-workspace.tool-connect .react-flow__handle,
+.board-workspace .react-flow__node:hover .react-flow__handle,
+.board-workspace .react-flow__node.selected .react-flow__handle {
+	opacity: 1;
+}
+.board-header {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 12px;
+	border-bottom: 1px solid var(--border);
+	background: var(--background);
+	z-index: 10;
+}
+.board-creation-tools {
+	position: absolute;
+	z-index: 10;
+	left: 12px;
+	top: 76px;
+	max-height: calc(100dvh - 100px);
+	overflow-y: auto;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 3px;
+	padding: 6px;
+	border: 1px solid var(--border);
+	border-radius: 14px;
+	background: var(--card);
+	box-shadow: 0 8px 32px #0002;
+}
+.board-tool-label {
+	display: none;
+}
+.board-creation-tools[data-expanded="true"] {
+	width: 208px;
+	align-items: stretch;
+}
+:where(.board-creation-tools[data-expanded="true"]) button {
+	width: 100%;
+	justify-content: flex-start;
+	padding-inline: 10px;
+}
+:where(.board-creation-tools[data-expanded="true"], .board-shape-options)
+	.board-tool-label {
+	display: inline;
+}
+button[aria-disabled="true"] {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+.board-shape-options {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 4px;
+	width: 300px;
+	max-width: calc(100vw - 24px);
+	max-height: var(--radix-popover-content-available-height);
+	overflow-y: auto;
+}
+.board-shape-options button {
+	width: 100%;
+	justify-content: flex-start;
+	padding-inline: 6px;
+}
+.board-selection-tools {
+	position: absolute;
+	z-index: 10;
+	top: 72px;
+	left: 84px;
+	right: 16px;
+	margin: 0 auto;
+	width: fit-content;
+	max-width: calc(100% - 100px);
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 4px;
+	padding: 6px;
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	background: var(--card);
+	box-shadow: 0 4px 24px #0002;
+}
+.board-selection-tools input[type="range"] {
+	width: 80px;
+}
+.board-workspace:has(.board-creation-tools[data-expanded="true"])
+	.board-selection-tools {
+	left: 236px;
+	max-width: calc(100% - 252px);
+}
+.board-color-input input {
+	width: 28px;
+	height: 28px;
+	padding: 2px;
+	border: 1px solid var(--border);
+	border-radius: 6px;
+}
+.board-color-input {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	font-size: 12px;
+}
+.board-notice {
+	position: absolute;
+	z-index: 12;
+	bottom: 16px;
+	left: 80px;
+	right: 80px;
+	width: fit-content;
+	margin: auto;
+	border-radius: 8px;
+	background: var(--card);
+	padding: 8px 12px;
+	font-size: 13px;
+	box-shadow: 0 2px 10px #0002;
+}
+.board-object,
+.board-object-visual {
+	width: 100%;
+	height: 100%;
+	position: relative;
+}
+.board-object-visual {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+.board-shape {
+	position: absolute;
+	inset: 0;
+	overflow: visible;
+}
+.board-shape-label {
+	position: absolute;
+	inset: 15%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	text-align: center;
+}
+.board-sticky {
+	width: 100%;
+	height: 100%;
+	padding: 20px;
+	box-shadow: 1px 5px 12px #0002;
+	overflow: hidden;
+	font-size: 18px;
+}
+.board-card {
+	width: 100%;
+	height: 100%;
+	padding: 18px;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	border: 1px solid;
+	border-radius: 10px;
+	overflow: hidden;
+	box-shadow: 0 3px 8px #0001;
+}
+.board-card strong {
+	font-size: 18px;
+}
+.board-frame {
+	width: 100%;
+	height: 100%;
+	border: 1px solid;
+	border-radius: 4px;
+}
+.board-frame > span {
+	position: absolute;
+	top: -28px;
+	left: 0;
+	color: var(--foreground);
+	font-size: 13px;
+}
+.board-object-group {
+	border: 1px dashed transparent;
+}
+.react-flow__node:hover .board-object-group {
+	border-color: #94a3b8;
+}
+.board-rich-text {
+	width: 100%;
+	height: 100%;
+	overflow: hidden;
+	font-size: 16px;
+}
+.board-object-text .board-rich-text {
+	color: var(--foreground);
+}
+.board-rich-text p {
+	min-height: 1.4em;
+}
+.board-rich-text ul {
+	list-style: disc;
+	padding-left: 24px;
+}
+.board-rich-text ol {
+	list-style: decimal;
+	padding-left: 24px;
+}
+.board-rich-text a {
+	text-decoration: underline;
+}
+.board-rich-text table {
+	width: 100%;
+	height: 100%;
+	border-collapse: collapse;
+	table-layout: fixed;
+	background: #ffffff;
+}
+.board-rich-text td,
+.board-rich-text th {
+	border: 1px solid #94a3b8;
+	padding: 8px;
+	text-align: left;
+	min-width: 48px;
+}
+.board-rich-text th {
+	background: #f1f5f9;
+}
+.board-youtube-preview {
+	display: flex;
+	width: 100%;
+	height: 100%;
+	align-items: center;
+	justify-content: center;
+	flex-direction: column;
+	gap: 14px;
+	background: #18181b;
+	color: #fff;
+	border-radius: 8px;
+}
+:where(.board-youtube-preview) svg {
+	width: 40px;
+	height: 40px;
+}
+.board-audio {
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	gap: 12px;
+	padding: 12px;
+	background: #f1f5f9;
+	border-radius: 10px;
+}
+.board-edit-dialog {
+	width: min(440px, calc(100vw - 32px));
+	margin: auto;
+	max-height: calc(100dvh - 32px);
+	overflow: auto;
+}
+.board-edit-dialog::backdrop {
+	background: #0006;
+}
+.board-rich-dialog {
+	width: min(720px, calc(100vw - 32px));
+}
+.board-editor-content {
+	max-height: 55dvh;
+	overflow: auto;
+}
+.board-editor-content ul {
+	list-style: disc;
+	padding-left: 24px;
+}
+.board-editor-content ol {
+	list-style: decimal;
+	padding-left: 24px;
+}
+.board-pen-layer {
+	position: fixed;
+	inset: 0;
+	width: 100vw;
+	height: 100dvh;
+	z-index: 5;
+	touch-action: none;
+	cursor: crosshair;
+}
+.board-canvas-controls {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	width: max-content;
+	padding: 4px;
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	background: var(--card);
+	box-shadow: 0 4px 20px #0002;
+}
+.board-workspace .react-flow__minimap {
+	bottom: 64px;
+}
+.board-workspace .react-flow__resize-control.handle {
+	width: 10px;
+	height: 10px;
+}
+.board-object > .react-flow__resize-control {
+	z-index: 2;
+}
+@media (max-width: 640px) {
+	.board-workspace:has(.board-creation-tools[data-expanded="true"])
+		.board-selection-tools {
+		visibility: hidden;
+	}
+}
+.board-workspace .react-flow__node.selected {
+	outline: 2px solid #3b82f6;
+	outline-offset: 3px;
+}
+@media (max-width: 640px) {
+	.board-workspace .react-flow__minimap {
+		display: none;
+	}
+}
+
+/* Tiptap's table node view adds these handles when TableKit is resizable. */
+.ProseMirror .tableWrapper {
+	overflow-x: auto;
+}
+
+.ProseMirror table {
+	border-collapse: collapse;
+	table-layout: fixed;
+	width: 100%;
+}
+
+.ProseMirror td,
+.ProseMirror th {
+	position: relative;
+	min-width: 48px;
+	border: 1px solid var(--border);
+	padding: 0.35rem;
+	vertical-align: top;
+}
+
+.ProseMirror .column-resize-handle {
+	position: absolute;
+	right: -3px;
+	top: 0;
+	bottom: 0;
+	width: 6px;
+	background: color-mix(in oklab, var(--primary) 45%, transparent);
+	pointer-events: none;
+}
+
+.resize-cursor {
+	cursor: col-resize;
 }
 
 @keyframes slide {
-  from {
-    background-position: 0 0;
-  }
-  to {
-    background-position: 256px 224px;
-  }
+	from {
+		background-position: 0 0;
+	}
+	to {
+		background-position: 256px 224px;
+	}
 }
 
 @keyframes spin {
-  from {
-    transform: rotate(0);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (prefers-reduced-motion) {
-  *,
-  ::before,
-  ::after {
-    animation: none !important;
-  }
+	from {
+		transform: rotate(0);
+	}
+	to {
+		transform: rotate(360deg);
+	}
 }

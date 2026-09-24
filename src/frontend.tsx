@@ -8,13 +8,23 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
+import { TooltipProvider } from "./components/ui/tooltip";
 
-const elem = document.getElementById("root")!;
+const elem = document.getElementById("root");
+if (!elem) throw new Error("Missing root element");
 const app = (
-  <StrictMode>
-    <App />
-  </StrictMode>
+	<StrictMode>
+		<TooltipProvider delayDuration={250}>
+			<App />
+		</TooltipProvider>
+	</StrictMode>
 );
 
-// https://bun.com/docs/bundler/hot-reloading#import-meta-hot-data
-(import.meta.hot.data.root ??= createRoot(elem)).render(app);
+let root: ReturnType<typeof createRoot>;
+if (import.meta.hot) {
+	// Bun recognizes this direct nullish assignment as a self-accepting HMR boundary.
+	root = import.meta.hot.data.root ??= createRoot(elem);
+} else {
+	root = createRoot(elem);
+}
+root.render(app);

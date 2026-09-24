@@ -12,15 +12,16 @@ coverage
 
 # logs
 logs
-_.log
-report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
+*.log
+report.*.json
 
 # dotenv environment variable files
 .env
-.env.development.local
-.env.test.local
-.env.production.local
-.env.local
+.env.*
+!.env.example
+.npmrc
+*.pem
+*.key
 
 # caches
 .eslintcache
@@ -32,3 +33,16 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # Finder (MacOS) folder config
 .DS_Store
+._*
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Browser test artifacts and local scratch files
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+/tmp/
+/temp/

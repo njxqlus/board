@@ -1,73 +1,35 @@
+import { createHash } from "node:crypto";
+import { readdir } from "node:fs/promises";
 import { sql } from "../lib/db";
 
-const migrations = [
-	
-] as const;
-
-type ExistingMigration = {
-	name: string;
-};
-
-type ExistingTable = {
-	exists: boolean;
-};
-
+type Applied = { name: string; checksum: string };
 async function main() {
-	await sql`
-		create table if not exists app_migrations (
-			name text primary key,
-			applied_at timestamptz not null default current_timestamp
-		)
-	`;
-
-	const appliedMigrations = await sql<ExistingMigration[]>`
-		select name from app_migrations
-	`;
-	const appliedNames = new Set(appliedMigrations.map(({ name }) => name));
-
-	for (const migration of migrations) {
-		if (appliedNames.has(migration.file)) {
-			continue;
+	const files = (await readdir("migrations"))
+		.filter((name) => /^\d+_.+\.sql$/.test(name))
+		.toSorted();
+	await sql.begin(async (tx) => {
+		await tx`select pg_advisory_xact_lock(8743216)`;
+		await tx`create table if not exists app_migrations (name text primary key, checksum text not null, applied_at timestamptz not null default now())`;
+		const applied = new Map(
+			(await tx<Applied[]>`select name, checksum from app_migrations`).map(
+				(row) => [row.name, row.checksum],
+			),
+		);
+		for (const name of files) {
+			const source = await Bun.file(`migrations/${name}`).text();
+			const checksum = createHash("sha256").update(source).digest("hex");
+			const old = applied.get(name);
+			if (old && old !== checksum)
+				throw new Error(`Migration checksum drift: ${name}`);
+			if (old) continue;
+			await tx.unsafe(source).simple();
+			await tx`insert into app_migrations ${tx({ name, checksum })}`;
+			console.log(`Applied ${name}`);
 		}
-
-		const [existingTable] =
-			"column" in migration
-				? await sql<ExistingTable[]>`
-					select exists (
-						select from information_schema.columns
-						where table_schema = current_schema()
-							and table_name = ${migration.table}
-							and column_name = ${migration.column}
-					) as exists
-				`
-				: await sql<ExistingTable[]>`
-					select exists (
-						select from pg_tables
-						where schemaname = current_schema() and tablename = ${migration.table}
-					) as exists
-				`;
-
-		if (existingTable?.exists) {
-			await sql`insert into app_migrations (name) values (${migration.file})`;
-			console.log(`Recorded ${migration.file}.`);
-			continue;
-		}
-
-		const migrationSql = await Bun.file(`migrations/${migration.file}`).text();
-		await sql.begin(async (transaction) => {
-			await transaction.unsafe(migrationSql).simple();
-			await transaction`insert into app_migrations (name) values (${migration.file})`;
-		});
-		console.log(`Applied ${migration.file}.`);
-	}
+	});
 }
-
 try {
 	await main();
 } finally {
-	try {
-		await sql.close();
-	} catch {
-		// A failed transaction can close Bun's connection before cleanup runs.
-	}
+	await sql.close();
 }

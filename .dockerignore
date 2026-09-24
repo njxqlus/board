@@ -1,7 +1,24 @@
-.env
-.env.*
-!.env.example
-.git
-dist
-node_modules
-.agents
+# Only application build/runtime inputs belong in the Docker context.
+# Excludes credentials, VCS, agent/editor settings, docs and test output.
+**
+!package.json
+!bun.lock
+!bunfig.toml
+!tsconfig.json
+!build.ts
+!LICENSE
+!src/
+!src/**
+!styles/
+!styles/**
+!migrations/
+!migrations/**
+!patches/
+!patches/**
+# Never include secrets or generated files under an allowed directory.
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+**/node_modules
+**/.DS_Store
