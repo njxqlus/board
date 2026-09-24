@@ -6,16 +6,19 @@ import { auth } from "./lib/auth";
 import { sql } from "./lib/db";
 import { handleRemoteMcp } from "./mcp/http";
 import {
+	addComment,
 	addMember,
 	archiveBoard,
 	BoardError,
 	cleanupStatus,
 	command,
 	createBoard,
+	createCommentThread,
 	deleteBoard,
 	getProject,
 	lifecycleOperation,
 	listBoards,
+	listCommentThreads,
 	members,
 	operationStatus,
 	removeMember,
@@ -331,6 +334,41 @@ const server = serve<{
 					void drainMediaCleanup();
 					return Response.json({ discarded });
 				}
+			}
+			const commentsMatch = url.pathname.match(
+				/^\/api\/boards\/([0-9a-f-]{36})\/comments(?:\/threads(?:\/([0-9a-f-]{36}))?)?$/i,
+			);
+			if (commentsMatch) {
+				const boardId = commentsMatch[1];
+				const threadId = commentsMatch[2];
+				if (!boardId) throw new BoardError(404, "Board not found", "NOT_FOUND");
+				const currentActor = await actor(req);
+				assertMutationOrigin(req, currentActor);
+				if (req.method === "GET" && !threadId)
+					return Response.json(await listCommentThreads(currentActor, boardId));
+				if (req.method === "POST" && !threadId) {
+					const thread = await createCommentThread(
+						currentActor,
+						boardId,
+						await body(req),
+					);
+					broadcast(boardId, { type: "comments.changed", threadId: thread.id });
+					return Response.json(thread, { status: 201 });
+				}
+				if (req.method === "POST" && threadId) {
+					const comment = await addComment(
+						currentActor,
+						boardId,
+						threadId,
+						await body(req),
+					);
+					broadcast(boardId, { type: "comments.changed", threadId });
+					return Response.json(comment, { status: 201 });
+				}
+				return new Response(null, {
+					status: 405,
+					headers: { allow: "GET, POST" },
+				});
 			}
 			const match = url.pathname.match(
 				/^\/api\/boards\/([0-9a-f-]{36})(?:\/(snapshot|commands|members|rename|archive|delete|operations|cleanup-status|ws))?$/i,

@@ -20,6 +20,7 @@ import {
 	ImagePlus,
 	type LucideIcon,
 	Map as MapIcon,
+	MessageCircle,
 	MousePointer2,
 	PanelTop,
 	Pencil,
@@ -55,7 +56,7 @@ import {
 } from "@/components/ui/tooltip";
 import type { ObjectRow } from "./types";
 
-export type CanvasTool = "select" | "hand" | "connect" | "pen";
+export type CanvasTool = "select" | "hand" | "connect" | "pen" | "comment";
 export function CanvasControls() {
 	const { zoomIn, zoomOut, fitView } = useReactFlow();
 	const { zoom } = useViewport();
@@ -242,6 +243,13 @@ export function CreationTools({
 				active={tool === "connect"}
 				disabled={disabled}
 				onClick={() => setTool("connect")}
+			/>
+			<ToolButton
+				icon={MessageCircle}
+				label="Comment"
+				active={tool === "comment"}
+				disabled={disabled}
+				onClick={() => setTool("comment")}
 			/>
 			<Popover open={shapesOpen} onOpenChange={setShapesOpen}>
 				<PopoverTrigger asChild>

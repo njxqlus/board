@@ -47,7 +47,25 @@ export type ConnectorRow = {
 		};
 	};
 };
-export type Cursor = { email: string; position: { x: number; y: number } };
+export type Cursor = {
+	email: string;
+	position: { x: number; y: number };
+};
+export type BoardComment = {
+	id: string;
+	body: string;
+	authorId: string;
+	authorEmail: string;
+	createdAt: string;
+};
+export type CommentThread = {
+	id: string;
+	objectId: string | null;
+	position: { x: number; y: number };
+	createdBy: string;
+	createdAt: string;
+	comments: BoardComment[];
+};
 export type VersionedPatch = {
 	id: string;
 	expectedVersion: number;

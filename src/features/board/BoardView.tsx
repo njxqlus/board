@@ -26,14 +26,16 @@ import {
 	CreationTools,
 	SelectionTools,
 } from "./BoardTools";
+import { CommentDialog, type CommentDraft, CommentPins } from "./Comments";
 import { changeBoardNodes } from "./node-state";
 import { ObjectEditor } from "./ObjectEditor";
 import { nodeTypes, ObjectActions, portAnchor } from "./ObjectNode";
 import { PenLayer } from "./PenLayer";
-import { CursorReporter, RemoteCursors } from "./Presence";
+import { CursorLegend, CursorReporter, RemoteCursors } from "./Presence";
 import { RichTextEditor } from "./RichTextEditor";
 import type {
 	CommandResult,
+	CommentThread,
 	ConnectorRow,
 	Cursor,
 	HistoryEntry,
@@ -45,10 +47,12 @@ export function BoardView({
 	id,
 	back,
 	currentUserId,
+	currentUserEmail,
 }: {
 	id: string;
 	back: () => void;
 	currentUserId: string;
+	currentUserEmail: string;
 }) {
 	const [viewport] = useState(() => {
 		try {
@@ -86,6 +90,11 @@ export function BoardView({
 	const [connectionStatus, setConnectionStatus] = useState("Connecting");
 	const [collaborationNotice, setCollaborationNotice] = useState("");
 	const [cursors, setCursors] = useState<Record<string, Cursor>>({});
+	const [commentThreads, setCommentThreads] = useState<CommentThread[]>([]);
+	const [openCommentThreadId, setOpenCommentThreadId] = useState<string | null>(
+		null,
+	);
+	const [commentDraft, setCommentDraft] = useState<CommentDraft | null>(null);
 	const [clipboard, setClipboard] = useState<
 		Array<{ id: string; expectedVersion: number }>
 	>([]);
@@ -150,11 +159,22 @@ export function BoardView({
 		const response = await fetch(`/api/boards/${id}/members`);
 		if (response.ok) setMemberRows(await response.json());
 	}, [id]);
+	const loadComments = useCallback(async () => {
+		try {
+			const response = await fetch(`/api/boards/${id}/comments`);
+			if (response.ok) setCommentThreads(await response.json());
+		} catch {
+			setCollaborationNotice(
+				"Unable to refresh comments. Check your connection.",
+			);
+		}
+	}, [id]);
 	useEffect(() => {
 		if (settings) void loadMembers();
 	}, [settings, loadMembers]);
 	useEffect(() => {
 		void load();
+		void loadComments();
 		let closed = false;
 		let socket: WebSocket | undefined;
 		let retry = 0;
@@ -177,10 +197,14 @@ export function BoardView({
 						objectId?: string;
 						user?: { id?: string; email?: string };
 						userId?: string;
+						threadId?: string;
 						email?: string;
 						position?: { x?: unknown; y?: unknown };
 					};
 					if (message.type === "board.changed") void load();
+					if (message.type === "comments.changed") {
+						void loadComments();
+					}
 					if (
 						message.type === "presence.cursor" &&
 						message.user?.id &&
@@ -244,7 +268,7 @@ export function BoardView({
 			socket?.close();
 			if (socketRef.current === socket) socketRef.current = undefined;
 		};
-	}, [id, load]);
+	}, [id, load, loadComments]);
 	useEffect(() => {
 		if (!editing) return;
 		const renew = () =>
@@ -594,6 +618,47 @@ export function BoardView({
 				data: { shape, label: "" },
 			},
 		]);
+	};
+	const startComment = (
+		position: { x: number; y: number },
+		objectId: string | null = null,
+	) => {
+		if (boardState !== "active") return;
+		setCommentDraft({ position, objectId });
+		setOpenCommentThreadId(null);
+	};
+	const createComment = async (draft: CommentDraft, body: string) => {
+		const response = await fetch(`/api/boards/${id}/comments/threads`, {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({ ...draft, body }),
+		});
+		if (!response.ok) {
+			setCollaborationNotice("Unable to add comment. Please try again.");
+			return false;
+		}
+		const thread = (await response.json()) as CommentThread;
+		await loadComments();
+		setCommentDraft(null);
+		setOpenCommentThreadId(thread.id);
+		return true;
+	};
+	const replyToComment = async (threadId: string, body: string) => {
+		const response = await fetch(
+			`/api/boards/${id}/comments/threads/${threadId}`,
+			{
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ body }),
+			},
+		);
+		if (!response.ok) {
+			setCollaborationNotice("Unable to post reply. Please try again.");
+			return false;
+		}
+		await response.json();
+		await loadComments();
+		return true;
 	};
 	const editObject = (object: ObjectRow) => {
 		if (
@@ -973,6 +1038,9 @@ export function BoardView({
 		});
 		if (response.ok) back();
 	};
+	const openCommentThread = commentThreads.find(
+		(thread) => thread.id === openCommentThreadId,
+	);
 	return (
 		<main
 			className={`board-workspace relative flex h-dvh min-h-0 flex-col overflow-hidden tool-${tool}`}
@@ -1114,7 +1182,7 @@ export function BoardView({
 								snapToGrid={snap}
 								snapGrid={[20, 20]}
 								nodesDraggable={boardState === "active" && tool === "select"}
-								nodesConnectable={boardState === "active"}
+								nodesConnectable={boardState === "active" && tool !== "comment"}
 								deleteKeyCode={
 									boardState === "active" &&
 									!editing &&
@@ -1157,6 +1225,28 @@ export function BoardView({
 									const object = objects.find((value) => value.id === node.id);
 									if (object) editObject(object);
 								}}
+								onPaneClick={(event) => {
+									if (tool !== "comment") return;
+									startComment(
+										flow.current?.screenToFlowPosition({
+											x: event.clientX,
+											y: event.clientY,
+										}) ?? { x: event.clientX, y: event.clientY },
+									);
+								}}
+								onNodeClick={(event, node) => {
+									if (tool !== "comment") return;
+									event.preventDefault();
+									event.stopPropagation();
+									if (!objects.some((object) => object.id === node.id)) return;
+									startComment(
+										flow.current?.screenToFlowPosition({
+											x: event.clientX,
+											y: event.clientY,
+										}) ?? { x: event.clientX, y: event.clientY },
+										node.id,
+									);
+								}}
 								minZoom={0.01}
 								defaultViewport={viewport}
 								onMoveEnd={(_, nextViewport) =>
@@ -1182,6 +1272,15 @@ export function BoardView({
 							</ReactFlow>
 							<CursorReporter socketRef={socketRef} />
 							<RemoteCursors cursors={cursors} />
+							<CommentPins
+								threads={commentThreads}
+								objects={objects}
+								open={setOpenCommentThreadId}
+							/>
+							<CursorLegend
+								cursors={cursors}
+								currentUser={{ id: currentUserId, email: currentUserEmail }}
+							/>
 						</ReactFlowProvider>
 					</ObjectActions.Provider>
 				</div>
@@ -1229,6 +1328,20 @@ export function BoardView({
 					}}
 				/>
 			)}
+			{commentDraft || openCommentThread ? (
+				<CommentDialog
+					key={commentDraft ? "draft" : openCommentThread?.id}
+					thread={openCommentThread ?? null}
+					draft={commentDraft}
+					readonly={boardState !== "active"}
+					close={() => {
+						setCommentDraft(null);
+						setOpenCommentThreadId(null);
+					}}
+					create={createComment}
+					reply={replyToComment}
+				/>
+			) : null}
 			{settings && (
 				<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
 					<div className="flex w-full max-w-md flex-col gap-4 rounded-lg border bg-card p-5 shadow-xl">

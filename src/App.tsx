@@ -28,7 +28,12 @@ export function App() {
 	if (isPending) return null;
 	if (!session) return <Login />;
 	return board ? (
-		<BoardView id={board} back={closeBoard} currentUserId={session.user.id} />
+		<BoardView
+			id={board}
+			back={closeBoard}
+			currentUserId={session.user.id}
+			currentUserEmail={session.user.email}
+		/>
 	) : (
 		<Projects open={openBoard} />
 	);
