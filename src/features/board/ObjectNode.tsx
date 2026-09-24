@@ -115,7 +115,9 @@ const ObjectNode = memo(function ObjectNode({
 	const maxY = Math.max(1, ...points.map((point) => point.y));
 	return (
 		<div
-			className={cn("board-object", `board-object-${kind}`)}
+			className={cn("board-object", `board-object-${kind}`, {
+				"board-object-container": kind === "frame" || kind === "group",
+			})}
 			data-kind={kind}
 		>
 			<NodeResizer
@@ -201,7 +203,14 @@ const ObjectNode = memo(function ObjectNode({
 						className="board-frame"
 						style={{ borderColor: stroke, borderWidth: strokeWidth }}
 					>
-						<span>{String(value.label ?? "Frame")}</span>
+						<span className="board-container-drag-handle">
+							{String(value.label ?? "Frame")}
+						</span>
+					</div>
+				) : null}
+				{kind === "group" ? (
+					<div className="board-object-group">
+						<span className="board-container-drag-handle">Group</span>
 					</div>
 				) : null}
 				{kind === "freehand" ? (

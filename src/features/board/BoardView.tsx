@@ -739,15 +739,6 @@ export function BoardView({
 	const drag: OnNodeDrag = async (_, node, dragged) => {
 		const moving = dragged?.length ? dragged : [node];
 		const ids = new Set(moving.map((value) => value.id));
-		const movedGroups = new Map<string, { x: number; y: number }>();
-		for (const value of moving) {
-			const object = objects.find((candidate) => candidate.id === value.id);
-			if (object?.kind !== "group" && object?.kind !== "frame") continue;
-			movedGroups.set(value.id, {
-				x: value.position.x - object.x,
-				y: value.position.y - object.y,
-			});
-		}
 		const changes = moving.flatMap((value) => {
 			const object = objects.find((object) => object.id === value.id);
 			if (!object || (object.parentId && ids.has(object.parentId))) return [];
@@ -759,17 +750,6 @@ export function BoardView({
 				},
 			];
 		});
-		for (const child of objects) {
-			const delta = child.parentId
-				? movedGroups.get(child.parentId)
-				: undefined;
-			if (!delta) continue;
-			changes.push({
-				id: child.id,
-				expectedVersion: child.version,
-				patch: { x: child.x + delta.x, y: child.y + delta.y },
-			});
-		}
 		if (!changes.length) return;
 		const result = await send("objects.update", changes);
 		if (!result) {

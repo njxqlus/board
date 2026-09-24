@@ -14,23 +14,28 @@ export function projectNodes(
 			points.set(anchorPort(endpoint.anchor), endpoint.anchor);
 			attached.set(endpoint.objectId, points);
 		}
-	const objectNodes = objects.map((o) => ({
-		id: o.id,
-		type: "boardObject",
-		position: { x: o.x, y: o.y },
-		data: {
-			anchors: [...(attached.get(o.id)?.values() ?? [])],
-			kind: o.kind,
-			data: o.data,
-			mediaUrl:
-				typeof o.data.assetId === "string"
-					? `/api/boards/${id}/media/${o.data.assetId}`
-					: undefined,
-		},
-		width: o.width,
-		height: o.height,
-		zIndex: o.zIndex,
-	}));
+	const objectNodes = objects.map((o) => {
+		const isContainer = o.kind === "frame" || o.kind === "group";
+		return {
+			id: o.id,
+			type: "boardObject",
+			position: { x: o.x, y: o.y },
+			data: {
+				anchors: [...(attached.get(o.id)?.values() ?? [])],
+				kind: o.kind,
+				data: o.data,
+				mediaUrl:
+					typeof o.data.assetId === "string"
+						? `/api/boards/${id}/media/${o.data.assetId}`
+						: undefined,
+			},
+			width: o.width,
+			height: o.height,
+			zIndex: o.zIndex,
+			dragHandle: isContainer ? ".board-container-drag-handle" : undefined,
+			style: isContainer ? { pointerEvents: "none" as const } : undefined,
+		};
+	});
 	const anchors = connectors.flatMap((connector) =>
 		(["source", "target"] as const).flatMap((role) => {
 			const endpoint = connector.data[role];
