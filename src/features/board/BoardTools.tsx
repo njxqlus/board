@@ -420,7 +420,7 @@ export function SelectionTools({
 			/>
 			<ToolButton
 				icon={Group}
-				label="Group selection"
+				label="Group objects"
 				onClick={group}
 				disabled={selected.length < 2}
 				disabledReason="Select at least two objects"

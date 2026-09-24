@@ -41,6 +41,7 @@ import type {
 	HistoryEntry,
 	Member,
 	ObjectRow,
+	VersionedPatch,
 } from "./types";
 
 export function BoardView({
@@ -325,6 +326,30 @@ export function BoardView({
 	};
 	const versions = (result: CommandResult) =>
 		new Map(result.upserts?.map((value) => [value.id, value.version]) ?? []);
+	const updateWithHistory = async (
+		changes: VersionedPatch[],
+		previous: Map<string, Record<string, unknown>>,
+	) => {
+		if (!changes.length) return;
+		const result = await send("objects.update", changes);
+		if (!result) return;
+		const applied = versions(result);
+		setUndoStack((stack) => [
+			...stack,
+			{
+				undo: changes.map((change) => ({
+					...change,
+					expectedVersion: applied.get(change.id) ?? change.expectedVersion,
+					patch: previous.get(change.id) ?? {},
+				})),
+				redo: changes.map((change) => ({
+					...change,
+					expectedVersion: applied.get(change.id) ?? change.expectedVersion,
+				})),
+			},
+		]);
+		setRedoStack([]);
+	};
 	const undo = async () => {
 		const entry = undoStack.at(-1);
 		if (!entry) return;
@@ -450,20 +475,21 @@ export function BoardView({
 				: mode === "end"
 					? Math.max(...ends)
 					: (Math.min(...starts) + Math.max(...ends)) / 2;
-		void send(
-			"objects.update",
-			selected.map((object) => ({
-				id: object.id,
-				expectedVersion: object.version,
-				patch: {
-					[axis]:
-						mode === "start"
-							? reference
-							: mode === "end"
-								? reference - size(object)
-								: reference - size(object) / 2,
-				},
-			})),
+		const changes = selected.map((object) => ({
+			id: object.id,
+			expectedVersion: object.version,
+			patch: {
+				[axis]:
+					mode === "start"
+						? reference
+						: mode === "end"
+							? reference - size(object)
+							: reference - size(object) / 2,
+			},
+		}));
+		void updateWithHistory(
+			changes,
+			new Map(selected.map((object) => [object.id, { [axis]: object[axis] }])),
 		);
 	};
 	const distributeSelection = (axis: "x" | "y") => {
@@ -483,17 +509,19 @@ export function BoardView({
 				selected.reduce((total, object) => total + size(object), 0)) /
 			(selected.length - 1);
 		let cursor = first[axis] + size(first) + gap;
-		void send(
-			"objects.update",
-			selected.slice(1, -1).map((object) => {
-				const position = cursor;
-				cursor += size(object) + gap;
-				return {
-					id: object.id,
-					expectedVersion: object.version,
-					patch: { [axis]: position },
-				};
-			}),
+		const moving = selected.slice(1, -1);
+		const changes = moving.map((object) => {
+			const position = cursor;
+			cursor += size(object) + gap;
+			return {
+				id: object.id,
+				expectedVersion: object.version,
+				patch: { [axis]: position },
+			};
+		});
+		void updateWithHistory(
+			changes,
+			new Map(moving.map((object) => [object.id, { [axis]: object[axis] }])),
 		);
 	};
 	const styleSelection = (patch: Record<string, unknown>) =>
@@ -711,6 +739,15 @@ export function BoardView({
 	const drag: OnNodeDrag = async (_, node, dragged) => {
 		const moving = dragged?.length ? dragged : [node];
 		const ids = new Set(moving.map((value) => value.id));
+		const movedGroups = new Map<string, { x: number; y: number }>();
+		for (const value of moving) {
+			const object = objects.find((candidate) => candidate.id === value.id);
+			if (object?.kind !== "group" && object?.kind !== "frame") continue;
+			movedGroups.set(value.id, {
+				x: value.position.x - object.x,
+				y: value.position.y - object.y,
+			});
+		}
 		const changes = moving.flatMap((value) => {
 			const object = objects.find((object) => object.id === value.id);
 			if (!object || (object.parentId && ids.has(object.parentId))) return [];
@@ -722,6 +759,17 @@ export function BoardView({
 				},
 			];
 		});
+		for (const child of objects) {
+			const delta = child.parentId
+				? movedGroups.get(child.parentId)
+				: undefined;
+			if (!delta) continue;
+			changes.push({
+				id: child.id,
+				expectedVersion: child.version,
+				patch: { x: child.x + delta.x, y: child.y + delta.y },
+			});
+		}
 		if (!changes.length) return;
 		const result = await send("objects.update", changes);
 		if (!result) {

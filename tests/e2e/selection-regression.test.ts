@@ -124,7 +124,7 @@ test("controlled board selection and dragging do not loop", async () => {
 		await node.click();
 		expect(await node.getAttribute("class")).toContain("selected");
 		const group = page.getByRole("button", {
-			name: "Group selection",
+			name: "Group objects",
 			exact: true,
 		});
 		await group.hover();
