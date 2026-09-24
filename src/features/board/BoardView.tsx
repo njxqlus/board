@@ -100,6 +100,11 @@ export function BoardView({
 	>([]);
 	const [undoStack, setUndoStack] = useState<HistoryEntry[]>([]);
 	const [redoStack, setRedoStack] = useState<HistoryEntry[]>([]);
+	useEffect(() => {
+		if (!collaborationNotice) return;
+		const timeout = window.setTimeout(() => setCollaborationNotice(""), 5_000);
+		return () => window.clearTimeout(timeout);
+	}, [collaborationNotice]);
 	const isOwner = memberRows.some(
 		(member) => member.owner && member.id === currentUserId,
 	);
@@ -1054,6 +1059,12 @@ export function BoardView({
 				redo={() => void redo()}
 				canUndo={!!undoStack.length}
 				canRedo={!!redoStack.length}
+				cursorLegend={
+					<CursorLegend
+						cursors={cursors}
+						currentUser={{ id: currentUserId, email: currentUserEmail }}
+					/>
+				}
 			/>
 			{collaborationNotice ? (
 				<p role="status" className="board-notice">
@@ -1262,6 +1273,7 @@ export function BoardView({
 								<CanvasControls />
 								{minimap ? (
 									<MiniMap
+										position="bottom-left"
 										pannable
 										zoomable
 										nodeColor="#64748b"
@@ -1276,10 +1288,6 @@ export function BoardView({
 								threads={commentThreads}
 								objects={objects}
 								open={setOpenCommentThreadId}
-							/>
-							<CursorLegend
-								cursors={cursors}
-								currentUser={{ id: currentUserId, email: currentUserEmail }}
 							/>
 						</ReactFlowProvider>
 					</ObjectActions.Provider>

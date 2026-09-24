@@ -4,7 +4,6 @@ import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
 import type { Board } from "../board/types";
 import { McpAccess } from "./McpAccess";
-import { ThemeControl } from "./ThemeControl";
 export function Projects({ open }: { open: (id: string) => void }) {
 	const [boards, setBoards] = useState<Board[]>([]);
 	const [title, setTitle] = useState("");
@@ -45,7 +44,6 @@ export function Projects({ open }: { open: (id: string) => void }) {
 					<option value="active">Active</option>
 					<option value="archived">Archived</option>
 				</select>
-				<ThemeControl />
 				<Button variant="outline" onClick={() => authClient.signOut()}>
 					Log out
 				</Button>

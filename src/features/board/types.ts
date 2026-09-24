@@ -75,4 +75,3 @@ export type HistoryEntry = { undo: VersionedPatch[]; redo: VersionedPatch[] };
 export type CommandResult = {
 	upserts?: Array<{ id: string; version: number }>;
 };
-export type Theme = "light" | "dark" | "system";

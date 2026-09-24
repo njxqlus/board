@@ -42,7 +42,12 @@ import {
 	ZoomIn,
 	ZoomOut,
 } from "lucide-react";
-import { type ComponentProps, useEffect, useState } from "react";
+import {
+	type ComponentProps,
+	type ReactNode,
+	useEffect,
+	useState,
+} from "react";
 import { Button } from "@/components/ui/button";
 import {
 	Popover,
@@ -139,6 +144,7 @@ export function BoardHeader({
 	redo,
 	canUndo,
 	canRedo,
+	cursorLegend,
 }: {
 	title: string;
 	status: string;
@@ -148,6 +154,7 @@ export function BoardHeader({
 	redo: () => void;
 	canUndo: boolean;
 	canRedo: boolean;
+	cursorLegend: ReactNode;
 }) {
 	return (
 		<header className="board-header">
@@ -173,6 +180,7 @@ export function BoardHeader({
 				disabledReason="No movement to redo"
 			/>
 			<ToolButton icon={Settings} label="Settings" onClick={settings} />
+			{cursorLegend}
 		</header>
 	);
 }

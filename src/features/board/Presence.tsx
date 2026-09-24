@@ -111,34 +111,32 @@ export function CursorLegend({
 		[cursors, currentUser],
 	);
 	return (
-		<div className="board-cursor-legend">
-			<Popover>
-				<PopoverTrigger asChild>
-					<Button
-						type="button"
-						size="icon"
-						variant="outline"
-						aria-label="Show collaborator cursor colors"
-					>
-						<Info aria-hidden="true" />
-					</Button>
-				</PopoverTrigger>
-				<PopoverContent side="top" align="end" className="w-64 p-3">
-					<p className="mb-2 text-sm font-medium">Cursor colors</p>
-					<ul className="flex flex-col gap-2">
-						{people.map((person) => (
-							<li key={person.id} className="flex items-center gap-2 text-sm">
-								<span
-									className="board-cursor-color"
-									style={{ backgroundColor: cursorColor(person.id) }}
-									aria-hidden="true"
-								/>
-								<span className="truncate">{person.email}</span>
-							</li>
-						))}
-					</ul>
-				</PopoverContent>
-			</Popover>
-		</div>
+		<Popover>
+			<PopoverTrigger asChild>
+				<Button
+					type="button"
+					size="icon"
+					variant="ghost"
+					aria-label="Show collaborator cursor colors"
+				>
+					<Info aria-hidden="true" />
+				</Button>
+			</PopoverTrigger>
+			<PopoverContent side="bottom" align="end" className="w-64 p-3">
+				<p className="mb-2 text-sm font-medium">Cursor colors</p>
+				<ul className="flex flex-col gap-2">
+					{people.map((person) => (
+						<li key={person.id} className="flex items-center gap-2 text-sm">
+							<span
+								className="board-cursor-color"
+								style={{ backgroundColor: cursorColor(person.id) }}
+								aria-hidden="true"
+							/>
+							<span className="truncate">{person.email}</span>
+						</li>
+					))}
+				</ul>
+			</PopoverContent>
+		</Popover>
 	);
 }
