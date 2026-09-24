@@ -132,3 +132,42 @@ export async function addComment(
 		return comment;
 	});
 }
+
+export async function deleteComment(
+	actor: Actor,
+	projectId: string,
+	threadId: string,
+	commentId: string,
+) {
+	return sql.begin(async (tx) => {
+		await getProject(actor, projectId, true, tx);
+		const thread = await tx<{ id: string }[]>`
+			select id from board_comment_threads where id=${threadId} and project_id=${projectId} for update
+		`;
+		if (!thread[0])
+			throw new BoardError(
+				404,
+				"Comment thread was not found",
+				"COMMENT_NOT_FOUND",
+			);
+		const comment = await tx<{ author_id: string }[]>`
+			select author_id from board_comments where id=${commentId} and thread_id=${threadId} for update
+		`;
+		if (!comment[0])
+			throw new BoardError(404, "Comment was not found", "COMMENT_NOT_FOUND");
+		if (comment[0].author_id !== actor.id)
+			throw new BoardError(
+				403,
+				"You can only delete your own comments",
+				"COMMENT_DELETE_DENIED",
+			);
+		await tx`delete from board_comments where id=${commentId}`;
+		const count = await tx<{ count: string }[]>`
+			select count(*)::text as count from board_comments where thread_id=${threadId}
+		`;
+		const threadDeleted = Number(count[0]?.count ?? "0") === 0;
+		if (threadDeleted)
+			await tx`delete from board_comment_threads where id=${threadId}`;
+		return { threadDeleted };
+	});
+}

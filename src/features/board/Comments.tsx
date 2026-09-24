@@ -1,6 +1,6 @@
 import { useReactFlow, useViewport } from "@xyflow/react";
-import { MessageCircle, Send, X } from "lucide-react";
-import { useEffect, useMemo, useRef } from "react";
+import { MessageCircle, Send, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { CommentThread, ObjectRow } from "./types";
@@ -62,24 +62,40 @@ export function CommentDialog({
 	thread,
 	draft,
 	readonly,
+	currentUserId,
 	close,
 	create,
 	reply,
+	remove,
 }: {
 	thread: CommentThread | null;
 	draft: CommentDraft | null;
 	readonly: boolean;
+	currentUserId: string;
 	close: () => void;
 	create: (draft: CommentDraft, body: string) => Promise<boolean>;
 	reply: (threadId: string, body: string) => Promise<boolean>;
+	remove: (threadId: string, commentId: string) => Promise<boolean>;
 }) {
 	const dialog = useRef<HTMLDialogElement>(null);
+	const [deletingCommentId, setDeletingCommentId] = useState<string | null>(
+		null,
+	);
 	const creating = Boolean(draft);
 	useEffect(() => {
 		dialog.current?.showModal();
 		return () => dialog.current?.close();
 	}, []);
 	const title = creating ? "New comment" : "Comments";
+	const deleteComment = async (commentId: string) => {
+		if (!thread) return;
+		setDeletingCommentId(commentId);
+		try {
+			await remove(thread.id, commentId);
+		} finally {
+			setDeletingCommentId(null);
+		}
+	};
 	return (
 		<dialog
 			ref={dialog}
@@ -141,9 +157,24 @@ export function CommentDialog({
 							<article key={comment.id} className="board-comment-message">
 								<div className="flex items-baseline justify-between gap-3">
 									<strong>{comment.authorEmail}</strong>
-									<time dateTime={comment.createdAt}>
-										{new Date(comment.createdAt).toLocaleString()}
-									</time>
+									<div className="flex items-center gap-1">
+										<time dateTime={comment.createdAt}>
+											{new Date(comment.createdAt).toLocaleString()}
+										</time>
+										{!readonly && comment.authorId === currentUserId ? (
+											<Button
+												type="button"
+												size="icon-sm"
+												variant="destructive"
+												disabled={deletingCommentId === comment.id}
+												onClick={() => void deleteComment(comment.id)}
+												aria-label="Delete your comment"
+												title="Delete your comment"
+											>
+												<Trash2 aria-hidden="true" />
+											</Button>
+										) : null}
+									</div>
 								</div>
 								<p>{comment.body}</p>
 							</article>

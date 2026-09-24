@@ -8,6 +8,7 @@ export {
 	type BoardComment,
 	type CommentThread,
 	createCommentThread,
+	deleteComment,
 	listCommentThreads,
 } from "./comments";
 export * from "./projects";

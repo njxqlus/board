@@ -15,6 +15,7 @@ import {
 	createBoard,
 	createCommentThread,
 	deleteBoard,
+	deleteComment,
 	getProject,
 	lifecycleOperation,
 	listBoards,
@@ -336,11 +337,12 @@ const server = serve<{
 				}
 			}
 			const commentsMatch = url.pathname.match(
-				/^\/api\/boards\/([0-9a-f-]{36})\/comments(?:\/threads(?:\/([0-9a-f-]{36}))?)?$/i,
+				/^\/api\/boards\/([0-9a-f-]{36})\/comments(?:\/threads(?:\/([0-9a-f-]{36})(?:\/messages\/([0-9a-f-]{36}))?)?)?$/i,
 			);
 			if (commentsMatch) {
 				const boardId = commentsMatch[1];
 				const threadId = commentsMatch[2];
+				const commentId = commentsMatch[3];
 				if (!boardId) throw new BoardError(404, "Board not found", "NOT_FOUND");
 				const currentActor = await actor(req);
 				assertMutationOrigin(req, currentActor);
@@ -365,9 +367,19 @@ const server = serve<{
 					broadcast(boardId, { type: "comments.changed", threadId });
 					return Response.json(comment, { status: 201 });
 				}
+				if (req.method === "DELETE" && threadId && commentId) {
+					const result = await deleteComment(
+						currentActor,
+						boardId,
+						threadId,
+						commentId,
+					);
+					broadcast(boardId, { type: "comments.changed", threadId });
+					return Response.json(result);
+				}
 				return new Response(null, {
 					status: 405,
-					headers: { allow: "GET, POST" },
+					headers: { allow: "GET, POST, DELETE" },
 				});
 			}
 			const match = url.pathname.match(

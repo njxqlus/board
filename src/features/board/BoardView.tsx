@@ -665,6 +665,20 @@ export function BoardView({
 		await loadComments();
 		return true;
 	};
+	const removeComment = async (threadId: string, commentId: string) => {
+		const response = await fetch(
+			`/api/boards/${id}/comments/threads/${threadId}/messages/${commentId}`,
+			{ method: "DELETE" },
+		);
+		if (!response.ok) {
+			setCollaborationNotice("Unable to delete comment. Please try again.");
+			return false;
+		}
+		const result = (await response.json()) as { threadDeleted: boolean };
+		await loadComments();
+		if (result.threadDeleted) setOpenCommentThreadId(null);
+		return true;
+	};
 	const editObject = (object: ObjectRow) => {
 		if (
 			boardState !== "active" ||
@@ -1342,12 +1356,14 @@ export function BoardView({
 					thread={openCommentThread ?? null}
 					draft={commentDraft}
 					readonly={boardState !== "active"}
+					currentUserId={currentUserId}
 					close={() => {
 						setCommentDraft(null);
 						setOpenCommentThreadId(null);
 					}}
 					create={createComment}
 					reply={replyToComment}
+					remove={removeComment}
 				/>
 			) : null}
 			{settings && (
