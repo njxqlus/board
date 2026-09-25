@@ -15,7 +15,8 @@ export function projectNodes(
 			attached.set(endpoint.objectId, points);
 		}
 	const objectNodes = objects.map((o) => {
-		const isContainer = o.kind === "frame" || o.kind === "group";
+		const isFrame = o.kind === "frame";
+		const isGroup = o.kind === "group";
 		return {
 			id: o.id,
 			type: "boardObject",
@@ -32,8 +33,13 @@ export function projectNodes(
 			width: o.width,
 			height: o.height,
 			zIndex: o.zIndex,
-			dragHandle: isContainer ? ".board-container-drag-handle" : undefined,
-			style: isContainer ? { pointerEvents: "none" as const } : undefined,
+			dragHandle: isFrame ? ".board-container-drag-handle" : undefined,
+			hidden: isGroup,
+			selectable: isGroup ? false : undefined,
+			draggable: isGroup ? false : undefined,
+			connectable: isGroup ? false : undefined,
+			focusable: isGroup ? false : undefined,
+			style: isFrame ? { pointerEvents: "none" as const } : undefined,
 		};
 	});
 	const anchors = connectors.flatMap((connector) =>

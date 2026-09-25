@@ -208,11 +208,6 @@ const ObjectNode = memo(function ObjectNode({
 						</span>
 					</div>
 				) : null}
-				{kind === "group" ? (
-					<div className="board-object-group">
-						<span className="board-container-drag-handle">Group</span>
-					</div>
-				) : null}
 				{kind === "freehand" ? (
 					<svg
 						className="size-full overflow-visible"

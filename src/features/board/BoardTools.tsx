@@ -377,7 +377,9 @@ export function SelectionTools({
 	copy,
 	duplicate,
 	group,
+	canGroup,
 	ungroup,
+	canUngroup,
 	stack,
 	align,
 	distribute,
@@ -390,7 +392,9 @@ export function SelectionTools({
 	copy: () => void;
 	duplicate: () => void;
 	group: () => void;
+	canGroup: boolean;
 	ungroup: () => void;
+	canUngroup: boolean;
 	stack: (direction: -1 | 1) => void;
 	align: (axis: "x" | "y", mode: "start") => void;
 	distribute: (axis: "x" | "y") => void;
@@ -422,15 +426,19 @@ export function SelectionTools({
 				icon={Group}
 				label="Group objects"
 				onClick={group}
-				disabled={selected.length < 2}
-				disabledReason="Select at least two objects"
+				disabled={!canGroup}
+				disabledReason={
+					selected.some((object) => object.parentId)
+						? "Ungroup objects before grouping again"
+						: "Select at least two objects"
+				}
 			/>
 			<ToolButton
 				icon={Ungroup}
 				label="Ungroup"
 				onClick={ungroup}
-				disabled={!selected.some((object) => object.kind === "group")}
-				disabledReason="Select a group"
+				disabled={!canUngroup}
+				disabledReason="Select an object in a group"
 			/>
 			<ToolButton
 				icon={BringToFront}

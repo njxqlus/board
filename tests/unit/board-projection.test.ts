@@ -61,3 +61,22 @@ test("projection preserves arbitrary attachment points and hides free anchors", 
 	});
 	expect(object).not.toHaveProperty("selected");
 });
+
+test("groups are invisible logical containers", () => {
+	const group: ObjectRow = {
+		id: "group",
+		kind: "group",
+		x: 0,
+		y: 0,
+		width: 300,
+		height: 200,
+		data: {},
+		version: 1,
+	};
+	const node = projectNodes([group], [], "board")[0];
+	expect(node).toMatchObject({
+		hidden: true,
+		selectable: false,
+		draggable: false,
+	});
+});

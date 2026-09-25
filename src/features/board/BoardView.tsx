@@ -122,6 +122,15 @@ export function BoardView({
 		() => nodes.filter((node) => node.selected).map((node) => node.id),
 		[nodes],
 	);
+	const groupIds = useMemo(
+		() =>
+			new Set(
+				objects
+					.filter((object) => object.kind === "group")
+					.map((object) => object.id),
+			),
+		[objects],
+	);
 	useEffect(() => {
 		setNodes((current) => {
 			const byId = new Map(current.map((node) => [node.id, node]));
@@ -608,7 +617,7 @@ export function BoardView({
 					y: top - 24,
 					width: right - left + 48,
 					height: bottom - top + 48,
-					data: { label: kind === "frame" ? "Frame" : "" },
+					data: kind === "frame" ? { label: "Frame" } : {},
 				},
 				children: children.map((child) => ({
 					id: child.id,
@@ -740,18 +749,39 @@ export function BoardView({
 		const moving = dragged?.length ? dragged : [node];
 		const ids = new Set(moving.map((value) => value.id));
 		const changes = moving.flatMap((value) => {
-			const object = objects.find((object) => object.id === value.id);
+			const draggedObject = objects.find((object) => object.id === value.id);
+			const object =
+				draggedObject?.parentId &&
+				objects.find(
+					(candidate) =>
+						candidate.id === draggedObject.parentId &&
+						candidate.kind === "group",
+				)
+					? objects.find((candidate) => candidate.id === draggedObject.parentId)
+					: draggedObject;
 			if (!object || (object.parentId && ids.has(object.parentId))) return [];
+			const delta = draggedObject
+				? {
+						x: value.position.x - draggedObject.x,
+						y: value.position.y - draggedObject.y,
+					}
+				: { x: 0, y: 0 };
 			return [
 				{
 					id: object.id,
 					expectedVersion: object.version,
-					patch: { x: value.position.x, y: value.position.y },
+					patch: {
+						x: object.x + delta.x,
+						y: object.y + delta.y,
+					},
 				},
 			];
 		});
-		if (!changes.length) return;
-		const result = await send("objects.update", changes);
+		const uniqueChanges = [
+			...new Map(changes.map((change) => [change.id, change])).values(),
+		];
+		if (!uniqueChanges.length) return;
+		const result = await send("objects.update", uniqueChanges);
 		if (!result) {
 			await load();
 			return;
@@ -760,7 +790,7 @@ export function BoardView({
 		setUndoStack((stack) => [
 			...stack,
 			{
-				undo: changes.map((change) => {
+				undo: uniqueChanges.map((change) => {
 					const previous = objects.find((object) => object.id === change.id);
 					return {
 						...change,
@@ -768,7 +798,7 @@ export function BoardView({
 						patch: { x: previous?.x, y: previous?.y },
 					};
 				}),
-				redo: changes.map((change) => ({
+				redo: uniqueChanges.map((change) => ({
 					...change,
 					expectedVersion: applied.get(change.id) ?? change.expectedVersion,
 				})),
@@ -1145,14 +1175,38 @@ export function BoardView({
 						)
 					}
 					group={() => groupSelection()}
-					ungroup={() =>
-						deleteNodes(
-							nodes.filter(
-								(node) =>
-									selectedIds.includes(node.id) && node.data.kind === "group",
-							),
+					canGroup={
+						selectedIds.length >= 2 &&
+						!objects.some(
+							(object) =>
+								selectedIds.includes(object.id) &&
+								Boolean(object.parentId && groupIds.has(object.parentId)),
 						)
 					}
+					ungroup={() => {
+						const selectedGroupIds = new Set(
+							objects
+								.filter(
+									(object) =>
+										(object.kind === "group" &&
+											selectedIds.includes(object.id)) ||
+										(object.parentId != null &&
+											groupIds.has(object.parentId) &&
+											selectedIds.includes(object.id)),
+								)
+								.map((object) =>
+									object.kind === "group" ? object.id : object.parentId,
+								)
+								.filter((id): id is string => Boolean(id)),
+						);
+						deleteNodes(nodes.filter((node) => selectedGroupIds.has(node.id)));
+					}}
+					canUngroup={objects.some(
+						(object) =>
+							selectedIds.includes(object.id) &&
+							(object.kind === "group" ||
+								Boolean(object.parentId && groupIds.has(object.parentId))),
+					)}
 					stack={stackSelection}
 					align={alignSelection}
 					distribute={distributeSelection}
