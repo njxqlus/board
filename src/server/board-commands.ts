@@ -249,7 +249,12 @@ export async function command(
 							select object.id from board_objects object join descendant_ids on object.parent_id=descendant_ids.id
 						)
 						select id,kind,parent_id,x,y,width,height,z_index,data,version
-						from board_objects where id in (select id from descendant_ids) for update
+						from board_objects
+						where project_id=${projectId} and id<>${current.id} and (
+							id in (select id from descendant_ids) or
+							(x>=${current.x} and y>=${current.y} and x+width<=${current.x + current.width} and y+height<=${current.y + current.height})
+						)
+						for update
 					`;
 					const leaseConflict = foreignLease(
 						projectId,

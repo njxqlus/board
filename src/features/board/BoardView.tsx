@@ -789,9 +789,12 @@ export function BoardView({
 		const objectsById = new Map(objects.map((object) => [object.id, object]));
 		const groupAncestor = (object: ObjectRow | undefined) => {
 			let current = object;
-			while (current?.parentId) {
-				const parent = objectsById.get(current.parentId);
+			while (current) {
+				const parent = current.parentId
+					? objectsById.get(current.parentId)
+					: containingFrame(objects, current, { x: current.x, y: current.y });
 				if (parent?.kind === "group") return parent;
+				if (!parent || parent.id === current.id) return undefined;
 				current = parent;
 			}
 			return undefined;
