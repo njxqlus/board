@@ -17,6 +17,28 @@ test("rejects invalid board geometry", () => {
 		}),
 	).toThrow();
 });
+test("accepts a single-line header and bounded size", () => {
+	expect(
+		objectInputSchema.parse({
+			kind: "header",
+			x: 0,
+			y: 0,
+			width: 1_000,
+			height: 200,
+			data: { text: "Roadmap", fontSize: 160 },
+		}),
+	).toMatchObject({ kind: "header" });
+	expect(() =>
+		objectInputSchema.parse({
+			kind: "header",
+			x: 0,
+			y: 0,
+			width: 1_000,
+			height: 200,
+			data: { text: "First line\nSecond line" },
+		}),
+	).toThrow();
+});
 test("accepts a bounded free connector", () => {
 	const connector = connectorInputSchema.parse({
 		source: { kind: "free", point: { x: 0, y: 0 } },

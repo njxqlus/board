@@ -6,6 +6,14 @@ export function defaultObject(
 ): BoardObjectInput {
 	const base = { ...position, width: 200, height: 140 };
 	switch (kind) {
+		case "header":
+			return {
+				...base,
+				width: 1_600,
+				height: 220,
+				kind,
+				data: { text: "Header", fontSize: 160 },
+			};
 		case "text":
 			return {
 				...base,

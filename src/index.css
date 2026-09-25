@@ -243,6 +243,20 @@ button[aria-disabled="true"] {
 .board-object-text .board-rich-text {
 	color: var(--foreground);
 }
+.board-object-header,
+.board-object-header .board-object-visual {
+	overflow: visible;
+}
+.board-header-object {
+	width: max-content;
+	min-width: 100%;
+	color: var(--foreground);
+	font-weight: 700;
+	line-height: 1;
+	letter-spacing: -0.04em;
+	white-space: nowrap;
+	user-select: none;
+}
 .board-rich-text p {
 	min-height: 1.4em;
 }

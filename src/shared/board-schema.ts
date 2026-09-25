@@ -238,6 +238,16 @@ export const objectInputSchema = z.discriminatedUnion("kind", [
 		data: z.object({ content: richText, headerRow: z.boolean().optional() }),
 	}),
 	base.extend({
+		kind: z.literal("header"),
+		data: z.object({
+			text: z
+				.string()
+				.max(2_000)
+				.refine((text) => !/[\r\n]/.test(text), "Header must be a single line"),
+			fontSize: z.number().min(24).max(10_000).optional(),
+		}),
+	}),
+	base.extend({
 		kind: z.literal("freehand"),
 		data: z.object({
 			points: z.array(pointSchema).min(2).max(10_000),

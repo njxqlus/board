@@ -17,6 +17,7 @@ import {
 	Grid2X2,
 	Group,
 	Hand,
+	Heading1,
 	ImagePlus,
 	type LucideIcon,
 	Map as MapIcon,
@@ -317,6 +318,12 @@ export function CreationTools({
 				label="Card"
 				disabled={disabled}
 				onClick={() => add("card")}
+			/>
+			<ToolButton
+				icon={Heading1}
+				label="Header"
+				disabled={disabled}
+				onClick={() => add("header")}
 			/>
 			<ToolButton
 				icon={Type}

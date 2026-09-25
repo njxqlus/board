@@ -6,6 +6,7 @@ import {
 	type NodeTypes,
 	Position,
 	useUpdateNodeInternals,
+	useViewport,
 } from "@xyflow/react";
 import { Play } from "lucide-react";
 import {
@@ -64,6 +65,17 @@ function Youtube({ videoId, title }: { videoId: string; title: string }) {
 			<span>{title}</span>
 			<small>Click to activate player</small>
 		</button>
+	);
+}
+
+function Header({ text, fontSize }: { text: string; fontSize: number }) {
+	const { zoom } = useViewport();
+	// Preserve a 32px on-screen minimum so section labels remain legible on a zoomed-out board.
+	const renderedFontSize = Math.max(fontSize, 32 / Math.max(zoom, 0.01));
+	return (
+		<div className="board-header-object" style={{ fontSize: renderedFontSize }}>
+			{text}
+		</div>
 	);
 }
 
@@ -130,6 +142,12 @@ const ObjectNode = memo(function ObjectNode({
 				onResizeEnd={finishResize}
 			/>
 			<div className="board-object-visual" style={visual}>
+				{kind === "header" ? (
+					<Header
+						text={String(value.text ?? "Header")}
+						fontSize={Number(value.fontSize ?? 160)}
+					/>
+				) : null}
 				{kind === "shape" ? (
 					<>
 						<svg

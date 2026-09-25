@@ -21,13 +21,15 @@ export function ObjectEditor({
 		dialog.current?.showModal();
 	}, []);
 	const fields =
-		object.kind === "card"
-			? ["title", "body"]
-			: object.kind === "youtube"
-				? ["title", "videoId"]
-				: ["image", "video", "audio"].includes(object.kind)
-					? ["caption", "alt"]
-					: ["label"];
+		object.kind === "header"
+			? ["text", "fontSize"]
+			: object.kind === "card"
+				? ["title", "body"]
+				: object.kind === "youtube"
+					? ["title", "videoId"]
+					: ["image", "video", "audio"].includes(object.kind)
+						? ["caption", "alt"]
+						: ["label"];
 	return (
 		<dialog
 			ref={dialog}
@@ -39,7 +41,9 @@ export function ObjectEditor({
 				className="flex flex-col gap-4"
 				onSubmit={async (event) => {
 					event.preventDefault();
-					const patch = Object.fromEntries(new FormData(event.currentTarget));
+					const patch: Record<string, unknown> = Object.fromEntries(
+						new FormData(event.currentTarget),
+					);
 					if (object.kind === "youtube") {
 						const videoId = normalizeYouTubeVideoId(String(patch.videoId));
 						if (!videoId) {
@@ -47,6 +51,9 @@ export function ObjectEditor({
 							return;
 						}
 						patch.videoId = videoId;
+					}
+					if (object.kind === "header") {
+						patch.fontSize = Number(patch.fontSize);
 					}
 					setPending(true);
 					try {
@@ -65,7 +72,11 @@ export function ObjectEditor({
 						htmlFor={`object-${field}`}
 						className="flex flex-col gap-2 capitalize"
 					>
-						{field === "videoId" ? "YouTube URL or ID" : field}
+						{field === "videoId"
+							? "YouTube URL or ID"
+							: field === "fontSize"
+								? "Size"
+								: field}
 						{field === "body" || field === "label" ? (
 							<Textarea
 								id={`object-${field}`}
@@ -79,6 +90,9 @@ export function ObjectEditor({
 								id={`object-${field}`}
 								aria-label={field === "videoId" ? "YouTube URL or ID" : field}
 								name={field}
+								type={field === "fontSize" ? "number" : "text"}
+								min={field === "fontSize" ? 24 : undefined}
+								max={field === "fontSize" ? 10_000 : undefined}
 								defaultValue={String(object.data[field] ?? "")}
 							/>
 						)}
