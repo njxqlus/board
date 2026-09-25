@@ -279,7 +279,13 @@ export async function command(
 				await tx`update board_objects set x=${parsed.x},y=${parsed.y},width=${parsed.width},height=${parsed.height},z_index=${parsed.zIndex ?? current.z_index},parent_id=${parsed.parentId ?? null},data=${data},version=version+1,updated_by=${actor.id},updated_at=now() where id=${raw.id}`;
 				upserts.push({ ...parsed, data, version: current.version + 1 });
 			}
-		else if (input.type === "objects.delete")
+		else if (input.type === "objects.delete") {
+			// A batch may contain a container and one of its children. Do not bump
+			// the child's version while detaching the container: the child is about
+			// to be deleted by this same command with its original expected version.
+			const deletingIds = new Set(
+				(input.changes as Array<{ id: string }>).map((change) => change.id),
+			);
 			for (const raw of input.changes as Array<{
 				id: string;
 				expectedVersion: number;
@@ -305,7 +311,13 @@ export async function command(
 						"Media deletion requires irreversible confirmation",
 						"MEDIA_CONFIRMATION_REQUIRED",
 					);
-				await tx`update board_objects set parent_id=null,version=version+1,updated_by=${actor.id},updated_at=now() where project_id=${projectId} and parent_id=${raw.id}`;
+				const children = await tx<{ id: string }[]>`
+					select id from board_objects
+					where project_id=${projectId} and parent_id=${raw.id} for update
+				`;
+				for (const child of children)
+					if (!deletingIds.has(child.id))
+						await tx`update board_objects set parent_id=null,version=version+1,updated_by=${actor.id},updated_at=now() where id=${child.id}`;
 				await tx`delete from board_objects where id=${raw.id}`;
 				if (["image", "video", "audio"].includes(current.kind)) {
 					const assetId = (current.data as { assetId?: string }).assetId;
@@ -324,7 +336,7 @@ export async function command(
 				await tx`delete from board_connectors where project_id=${projectId} and (data->'source'->>'objectId'=${raw.id} or data->'target'->>'objectId'=${raw.id})`;
 				deleted.push(raw.id);
 			}
-		else if (input.type === "objects.group") {
+		} else if (input.type === "objects.group") {
 			const request = z
 				.object({
 					group: objectInputSchema,

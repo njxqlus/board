@@ -294,6 +294,18 @@ test.skipIf(!databaseUrl)(
 				{ count: string }[]
 			>`select count(*)::text as count from board_objects where project_id=${boardId}`;
 			expect(objects[0]?.count).toBe("6");
+			await command({ id: userId, email: "owner@example.test" }, boardId, {
+				operationId: randomUUID(),
+				type: "objects.delete",
+				changes: [
+					{ id: frameId, expectedVersion: 2 },
+					{ id: childId, expectedVersion: 2 },
+				],
+			});
+			const remaining = await sql<
+				{ count: string }[]
+			>`select count(*)::text as count from board_objects where project_id=${boardId}`;
+			expect(remaining[0]?.count).toBe("4");
 		} finally {
 			if (boardId) {
 				await sql`delete from command_receipts where project_id=${boardId}`;
