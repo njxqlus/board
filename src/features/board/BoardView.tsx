@@ -44,6 +44,24 @@ import type {
 	VersionedPatch,
 } from "./types";
 
+function containingFrame(
+	objects: ObjectRow[],
+	object: ObjectRow,
+	position: { x: number; y: number },
+) {
+	return objects
+		.filter(
+			(frame) =>
+				frame.kind === "frame" &&
+				frame.id !== object.id &&
+				frame.x <= position.x &&
+				frame.y <= position.y &&
+				frame.x + frame.width >= position.x + object.width &&
+				frame.y + frame.height >= position.y + object.height,
+		)
+		.toSorted((a, b) => a.width * a.height - b.width * b.height)[0];
+}
+
 export function BoardView({
 	id,
 	back,
@@ -608,7 +626,10 @@ export function BoardView({
 									? objects.find(
 											(candidate) => candidate.id === object.parentId,
 										)
-									: undefined;
+									: containingFrame(objects, object, {
+											x: object.x,
+											y: object.y,
+										});
 								return parent?.kind === "frame"
 									? [parent.id, parent]
 									: [object.id, object];
@@ -785,14 +806,20 @@ export function BoardView({
 						y: value.position.y - draggedObject.y,
 					}
 				: { x: 0, y: 0 };
+			const position = { x: object.x + delta.x, y: object.y + delta.y };
+			const frame =
+				object === draggedObject && !["frame", "group"].includes(object.kind)
+					? containingFrame(objects, object, position)
+					: undefined;
 			return [
 				{
 					id: object.id,
 					expectedVersion: object.version,
-					patch: {
-						x: object.x + delta.x,
-						y: object.y + delta.y,
-					},
+					patch:
+						object === draggedObject &&
+						!["frame", "group"].includes(object.kind)
+							? { ...position, parentId: frame?.id ?? null }
+							: position,
 				},
 			];
 		});

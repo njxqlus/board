@@ -80,13 +80,18 @@ export async function command(
 						);
 					const parent = (
 						await tx<
-							{ kind: string; parent_id: string | null }[]
-						>`select kind,parent_id from board_objects where id=${value.parentId} and project_id=${projectId}`
+							{
+								kind: string;
+								parent_id: string | null;
+								grandparent_kind: string | null;
+							}[]
+						>`select parent.kind,parent.parent_id,grandparent.kind as grandparent_kind from board_objects parent left join board_objects grandparent on grandparent.id=parent.parent_id where parent.id=${value.parentId} and parent.project_id=${projectId}`
 					)[0];
 					if (
 						!parent ||
-						parent.parent_id ||
-						!["frame", "group"].includes(parent.kind)
+						(parent.kind !== "group" && parent.kind !== "frame") ||
+						(parent.parent_id &&
+							!(parent.kind === "frame" && parent.grandparent_kind === "group"))
 					)
 						throw new BoardError(
 							409,
@@ -171,13 +176,18 @@ export async function command(
 						);
 					const parent = (
 						await tx<
-							{ kind: string; parent_id: string | null }[]
-						>`select kind,parent_id from board_objects where id=${parsed.parentId} and project_id=${projectId}`
+							{
+								kind: string;
+								parent_id: string | null;
+								grandparent_kind: string | null;
+							}[]
+						>`select parent.kind,parent.parent_id,grandparent.kind as grandparent_kind from board_objects parent left join board_objects grandparent on grandparent.id=parent.parent_id where parent.id=${parsed.parentId} and parent.project_id=${projectId}`
 					)[0];
 					if (
 						!parent ||
-						parent.parent_id ||
-						!["frame", "group"].includes(parent.kind)
+						(parent.kind !== "group" && parent.kind !== "frame") ||
+						(parent.parent_id &&
+							!(parent.kind === "frame" && parent.grandparent_kind === "group"))
 					)
 						throw new BoardError(
 							409,
