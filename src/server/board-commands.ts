@@ -233,8 +233,13 @@ export async function command(
 				) {
 					const delta = { x: parsed.x - current.x, y: parsed.y - current.y };
 					const children = await tx<StoredObject[]>`
+						with recursive descendant_ids as (
+							select id from board_objects where project_id=${projectId} and parent_id=${current.id}
+							union all
+							select object.id from board_objects object join descendant_ids on object.parent_id=descendant_ids.id
+						)
 						select id,kind,parent_id,x,y,width,height,z_index,data,version
-						from board_objects where project_id=${projectId} and parent_id=${current.id} for update
+						from board_objects where id in (select id from descendant_ids) for update
 					`;
 					const leaseConflict = foreignLease(
 						projectId,
@@ -379,10 +384,13 @@ export async function command(
 					`
 				)[0];
 				if (!child) throw new BoardError(404, "Object not found");
-				if (["frame", "group"].includes(child.kind))
+				if (
+					child.kind === "group" ||
+					(child.kind === "frame" && child.parent_id)
+				)
 					throw new BoardError(
 						409,
-						"Containers cannot be grouped",
+						"Nested containers cannot be grouped",
 						"INVALID_PARENT",
 					);
 				if (child.version !== childRequest.expectedVersion)

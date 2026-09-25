@@ -594,11 +594,28 @@ export function BoardView({
 		return () => window.removeEventListener("keydown", onKeyDown);
 	}, [clipboard, objects, selectedIds, undoStack, redoStack]);
 	const groupSelection = (kind: "group" | "frame" = "group") => {
-		const children = objects.filter(
+		const selected = objects.filter(
 			(object) =>
 				selectedIds.includes(object.id) &&
 				!["frame", "group"].includes(object.kind),
 		);
+		const children =
+			kind === "group"
+				? [
+						...new Map(
+							selected.map((object) => {
+								const parent = object.parentId
+									? objects.find(
+											(candidate) => candidate.id === object.parentId,
+										)
+									: undefined;
+								return parent?.kind === "frame"
+									? [parent.id, parent]
+									: [object.id, object];
+							}),
+						).values(),
+					]
+				: selected;
 		if (!children.length) {
 			void send("objects.create", [defaultObject(kind, placement())]);
 			return;
@@ -748,17 +765,19 @@ export function BoardView({
 	const drag: OnNodeDrag = async (_, node, dragged) => {
 		const moving = dragged?.length ? dragged : [node];
 		const ids = new Set(moving.map((value) => value.id));
+		const objectsById = new Map(objects.map((object) => [object.id, object]));
+		const groupAncestor = (object: ObjectRow | undefined) => {
+			let current = object;
+			while (current?.parentId) {
+				const parent = objectsById.get(current.parentId);
+				if (parent?.kind === "group") return parent;
+				current = parent;
+			}
+			return undefined;
+		};
 		const changes = moving.flatMap((value) => {
-			const draggedObject = objects.find((object) => object.id === value.id);
-			const object =
-				draggedObject?.parentId &&
-				objects.find(
-					(candidate) =>
-						candidate.id === draggedObject.parentId &&
-						candidate.kind === "group",
-				)
-					? objects.find((candidate) => candidate.id === draggedObject.parentId)
-					: draggedObject;
+			const draggedObject = objectsById.get(value.id);
+			const object = groupAncestor(draggedObject) ?? draggedObject;
 			if (!object || (object.parentId && ids.has(object.parentId))) return [];
 			const delta = draggedObject
 				? {

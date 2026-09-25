@@ -13,34 +13,34 @@ export function changeBoardNodes(
 	const deltas = new Map<string, { x: number; y: number }>();
 	const previous = new Map(current.map((node) => [node.id, node]));
 	const objectsById = new Map(objects.map((object) => [object.id, object]));
+	const groupAncestorId = (id: string) => {
+		let current = objectsById.get(id);
+		while (current?.parentId) {
+			const parent = objectsById.get(current.parentId);
+			if (parent?.kind === "group") return parent.id;
+			current = parent;
+		}
+		return undefined;
+	};
 	for (const change of changes) {
 		if (change.type !== "position" || !change.dragging || !change.position)
 			continue;
 		const old = previous.get(change.id);
 		if (!old) continue;
-		const object = objectsById.get(change.id);
-		const parent = object?.parentId
-			? objectsById.get(object.parentId)
-			: undefined;
 		const containerId =
-			String(old.data.kind) === "frame" || String(old.data.kind) === "group"
+			groupAncestorId(change.id) ??
+			(String(old.data.kind) === "frame" || String(old.data.kind) === "group"
 				? change.id
-				: parent?.kind === "group"
-					? parent.id
-					: undefined;
+				: undefined);
 		if (!containerId) continue;
 		deltas.set(containerId, {
 			x: change.position.x - old.position.x,
 			y: change.position.y - old.position.y,
 		});
 	}
-	const parents = new Map(
-		objects.map((object) => [object.id, object.parentId]),
-	);
 	return applyNodeChanges(changes, current).map((node) => {
-		const parentId = parents.get(node.id);
 		const delta =
-			deltas.get(node.id) ?? (parentId ? deltas.get(parentId) : undefined);
+			deltas.get(node.id) ?? deltas.get(groupAncestorId(node.id) ?? "");
 		return delta && !changed.has(node.id)
 			? {
 					...node,
