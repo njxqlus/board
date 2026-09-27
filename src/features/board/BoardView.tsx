@@ -27,6 +27,7 @@ import {
 	SelectionTools,
 } from "./BoardTools";
 import { CommentDialog, type CommentDraft, CommentPins } from "./Comments";
+import { NodeMenu, type NodeMenuTarget } from "./NodeMenu";
 import { changeBoardNodes } from "./node-state";
 import { ObjectEditor } from "./ObjectEditor";
 import { nodeTypes, ObjectActions, portAnchor } from "./ObjectNode";
@@ -88,6 +89,9 @@ export function BoardView({
 	const [tool, setTool] = useState<CanvasTool>("select");
 	const [snap, setSnap] = useState(false);
 	const [minimap, setMinimap] = useState(false);
+	const [nodeMenu, setNodeMenu] = useState<NodeMenuTarget | null>(null);
+	const [highlightedId, setHighlightedId] = useState<string | null>(null);
+	const nodeGestureDragged = useRef(false);
 	const [plainEditing, setPlainEditing] = useState<ObjectRow | null>(null);
 	const [objects, setObjects] = useState<ObjectRow[]>([]);
 	const [connectors, setConnectors] = useState<ConnectorRow[]>([]);
@@ -161,6 +165,61 @@ export function BoardView({
 	}, [projectedNodes]);
 	const projectedEdges = useMemo(() => projectEdges(connectors), [connectors]);
 	const [edges, setEdges] = useState<Edge[]>([]);
+	const menuObject = objects.find((object) => object.id === nodeMenu?.id);
+	const activeHighlight = objects.some((object) => object.id === highlightedId)
+		? highlightedId
+		: null;
+	const highlightedNodes = useMemo(() => {
+		const ids = new Set<string>();
+		if (activeHighlight) {
+			ids.add(activeHighlight);
+			for (const edge of edges) {
+				if (
+					edge.source === activeHighlight ||
+					edge.target === activeHighlight
+				) {
+					ids.add(edge.source);
+					ids.add(edge.target);
+				}
+			}
+		}
+		return ids;
+	}, [edges, activeHighlight]);
+	const displayNodes = useMemo(
+		() =>
+			activeHighlight
+				? nodes.map((node) => ({
+						...node,
+						className: highlightedNodes.has(node.id)
+							? "board-connection-highlight"
+							: "board-connection-muted",
+					}))
+				: nodes,
+		[nodes, activeHighlight, highlightedNodes],
+	);
+	const displayEdges = useMemo(
+		() =>
+			activeHighlight
+				? edges.map((edge) => ({
+						...edge,
+						className:
+							edge.source === activeHighlight || edge.target === activeHighlight
+								? "board-connection-highlight"
+								: "board-connection-muted",
+					}))
+				: edges,
+		[edges, activeHighlight],
+	);
+	useEffect(() => {
+		const dismiss = (event: KeyboardEvent) => {
+			if (event.key === "Escape") {
+				setNodeMenu(null);
+				setHighlightedId(null);
+			}
+		};
+		window.addEventListener("keydown", dismiss);
+		return () => window.removeEventListener("keydown", dismiss);
+	}, []);
 	useEffect(() => setEdges(projectedEdges), [projectedEdges]);
 	const latestRevision = useRef(-1n);
 	const load = useCallback(async () => {
@@ -1343,11 +1402,36 @@ export function BoardView({
 									boardState === "active" &&
 									!editing &&
 									!plainEditing &&
+									!nodeMenu &&
 									!settings
 										? ["Backspace", "Delete"]
 										: null
 								}
 								panOnScroll
+								nodeDragThreshold={3}
+								nodeClickDistance={3}
+								onKeyDownCapture={(event) => {
+									const target = event.target as HTMLElement;
+									if (
+										tool !== "select" ||
+										!target.classList.contains("react-flow__node") ||
+										!["Enter", " ", "ContextMenu"].includes(event.key)
+									)
+										return;
+									const objectId = target.dataset.id;
+									if (!objects.some((object) => object.id === objectId)) return;
+									event.preventDefault();
+									event.stopPropagation();
+									const bounds = target.getBoundingClientRect();
+									setNodeMenu({
+										id: objectId as string,
+										x: bounds.x + bounds.width / 2,
+										y: bounds.y + bounds.height / 2,
+									});
+								}}
+								onPointerDownCapture={() => {
+									nodeGestureDragged.current = false;
+								}}
 								onPointerMove={(event) => {
 									if (
 										!(event.target as HTMLElement).closest(".react-flow__panel")
@@ -1359,8 +1443,8 @@ export function BoardView({
 								}}
 								zoomOnScroll={false}
 								zoomOnPinch
-								nodes={nodes}
-								edges={edges}
+								nodes={displayNodes}
+								edges={displayEdges}
 								onNodesChange={(changes) =>
 									setNodes((current) =>
 										changeBoardNodes(changes, current, objects),
@@ -1370,6 +1454,10 @@ export function BoardView({
 									setEdges((current) => applyEdgeChanges(changes, current))
 								}
 								nodeTypes={nodeTypes}
+								onNodeDragStart={() => {
+									nodeGestureDragged.current = true;
+									setNodeMenu(null);
+								}}
 								onNodeDragStop={drag}
 								onNodesDelete={deleteNodes}
 								onEdgesDelete={deleteEdges}
@@ -1377,11 +1465,8 @@ export function BoardView({
 								onReconnect={reconnect}
 								onDragOver={(event) => event.preventDefault()}
 								onDrop={dropFiles}
-								onNodeDoubleClick={(_, node) => {
-									const object = objects.find((value) => value.id === node.id);
-									if (object) editObject(object);
-								}}
 								onPaneClick={(event) => {
+									setNodeMenu(null);
 									if (tool !== "comment") return;
 									startComment(
 										flow.current?.screenToFlowPosition({
@@ -1391,6 +1476,25 @@ export function BoardView({
 									);
 								}}
 								onNodeClick={(event, node) => {
+									if (tool === "select") {
+										if (
+											nodeGestureDragged.current ||
+											event.shiftKey ||
+											event.metaKey ||
+											event.ctrlKey ||
+											(event.target as Element).closest(
+												".nodrag, .react-flow__handle, .react-flow__resize-control, button, a, input, textarea, select, video, audio, [contenteditable]",
+											)
+										)
+											return;
+										if (objects.some((object) => object.id === node.id))
+											setNodeMenu({
+												id: node.id,
+												x: event.clientX,
+												y: event.clientY,
+											});
+										return;
+									}
 									if (tool !== "comment") return;
 									event.preventDefault();
 									event.stopPropagation();
@@ -1404,6 +1508,7 @@ export function BoardView({
 									);
 								}}
 								minZoom={0.01}
+								onMoveStart={() => setNodeMenu(null)}
 								defaultViewport={viewport}
 								onMoveEnd={(_, nextViewport) =>
 									localStorage.setItem(
@@ -1436,6 +1541,50 @@ export function BoardView({
 							/>
 						</ReactFlowProvider>
 					</ObjectActions.Provider>
+					{activeHighlight ? (
+						<div className="absolute bottom-4 left-1/2 -translate-x-1/2">
+							<Button
+								variant="secondary"
+								onClick={() => setHighlightedId(null)}
+							>
+								Clear connection highlight
+							</Button>
+						</div>
+					) : null}
+					{nodeMenu && menuObject ? (
+						<NodeMenu
+							target={nodeMenu}
+							close={() => setNodeMenu(null)}
+							readonly={boardState !== "active"}
+							grouped={Boolean(
+								menuObject.parentId && groupIds.has(menuObject.parentId),
+							)}
+							highlighted={activeHighlight === menuObject.id}
+							edit={() => editObject(menuObject)}
+							duplicate={() =>
+								duplicate([
+									{ id: menuObject.id, expectedVersion: menuObject.version },
+								])
+							}
+							detach={() => {
+								void send("objects.update", [
+									{
+										id: menuObject.id,
+										expectedVersion: menuObject.version,
+										patch: { parentId: null },
+									},
+								]);
+							}}
+							remove={() =>
+								deleteNodes(nodes.filter((node) => node.id === menuObject.id))
+							}
+							highlight={() =>
+								setHighlightedId(
+									activeHighlight === menuObject.id ? null : menuObject.id,
+								)
+							}
+						/>
+					) : null}
 				</div>
 			)}
 			{plainEditing ? (

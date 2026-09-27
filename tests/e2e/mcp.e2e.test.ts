@@ -78,6 +78,89 @@ test.skipIf(
 			expect(
 				(await call("board_get", { boardId })).objects[0].data.style.opacity,
 			).toBe(0.4);
+			const groupId = crypto.randomUUID();
+			const groupedChildId = crypto.randomUUID();
+			const frameId = crypto.randomUUID();
+			const framedChildId = crypto.randomUUID();
+			await call("objects_create", {
+				boardId,
+				operationId: crypto.randomUUID(),
+				objects: [
+					{
+						id: groupId,
+						kind: "group",
+						x: 0,
+						y: 0,
+						width: 400,
+						height: 300,
+						data: { label: "MCP group" },
+					},
+					{
+						id: groupedChildId,
+						kind: "sticky",
+						x: 20,
+						y: 20,
+						width: 100,
+						height: 80,
+						parentId: groupId,
+						data: { label: "Grouped child" },
+					},
+					{
+						id: frameId,
+						kind: "frame",
+						x: 500,
+						y: 0,
+						width: 400,
+						height: 300,
+						data: { label: "MCP frame" },
+					},
+					{
+						id: framedChildId,
+						kind: "sticky",
+						x: 520,
+						y: 20,
+						width: 100,
+						height: 80,
+						parentId: frameId,
+						data: { label: "Framed child" },
+					},
+				],
+			});
+			await call("objects_update", {
+				boardId,
+				operationId: crypto.randomUUID(),
+				updates: [
+					{
+						id: groupedChildId,
+						expectedVersion: 1,
+						patch: { x: 40, style: { opacity: 0.6 } },
+					},
+					{
+						id: framedChildId,
+						expectedVersion: 1,
+						patch: { x: 540, style: { opacity: 0.7 } },
+					},
+				],
+			});
+			const nestedSnapshot = await call("board_get", { boardId });
+			const groupedChild = nestedSnapshot.objects.find(
+				(object: { id: string }) => object.id === groupedChildId,
+			);
+			const framedChild = nestedSnapshot.objects.find(
+				(object: { id: string }) => object.id === framedChildId,
+			);
+			expect(groupedChild).toMatchObject({
+				parentId: groupId,
+				x: 40,
+				version: 2,
+				data: { style: { opacity: 0.6 } },
+			});
+			expect(framedChild).toMatchObject({
+				parentId: frameId,
+				x: 540,
+				version: 2,
+				data: { style: { opacity: 0.7 } },
+			});
 			const resources = await client.readResource({
 				uri: `board://${boardId}/summary`,
 			});

@@ -123,6 +123,11 @@ test("controlled board selection and dragging do not loop", async () => {
 		expect(await page.getByLabel("Zoom level").textContent()).toBe("100%");
 		await node.click();
 		expect(await node.getAttribute("class")).toContain("selected");
+		await page
+			.getByRole("menuitem", { name: "Highlight connections", exact: true })
+			.waitFor();
+		await page.keyboard.press("Escape");
+		await page.getByRole("menu").waitFor({ state: "hidden" });
 		const group = page.getByRole("button", {
 			name: "Group objects",
 			exact: true,
@@ -162,6 +167,7 @@ test("controlled board selection and dragging do not loop", async () => {
 		await page.waitForResponse((response) =>
 			response.url().endsWith("/snapshot"),
 		);
+		expect(await page.getByRole("menu").count()).toBe(0);
 		const opacity = page.getByLabel("Object opacity");
 		await opacity.fill("0.4");
 		const saved = page.waitForResponse((response) =>
@@ -185,7 +191,8 @@ test("controlled board selection and dragging do not loop", async () => {
 
 		expect(await page.locator(".react-flow__attribution").count()).toBe(0);
 		expect(await page.locator(".board-object [data-kind]").count()).toBe(0);
-		await node.dblclick();
+		await node.click();
+		await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
 		await page.getByLabel(/^label$/i).fill("Edited shape");
 		const edited = page.waitForResponse((response) =>
 			response.url().endsWith("/snapshot"),
@@ -224,6 +231,24 @@ test("controlled board selection and dragging do not loop", async () => {
 		});
 		await page.locator(".react-flow__edge").waitFor();
 		expect(await page.locator(".react-flow__edge").count()).toBe(1);
+		await page.getByRole("button", { name: "Select", exact: true }).click();
+		await node.click();
+		await page
+			.getByRole("menuitem", { name: "Highlight connections", exact: true })
+			.click();
+		expect(
+			await page
+				.locator(".react-flow__node.board-connection-highlight")
+				.count(),
+		).toBe(2);
+		expect(
+			await page
+				.locator(".react-flow__edge.board-connection-highlight")
+				.count(),
+		).toBe(1);
+		await page
+			.getByRole("button", { name: "Clear connection highlight", exact: true })
+			.click();
 		const created = page.waitForResponse((response) =>
 			response.url().endsWith("/snapshot"),
 		);
@@ -236,6 +261,8 @@ test("controlled board selection and dragging do not loop", async () => {
 		const resize = await node
 			.locator(".react-flow__resize-control.bottom.right.handle")
 			.boundingBox();
+		await page.keyboard.press("Escape");
+		await page.getByRole("menu").waitFor({ state: "hidden" });
 		if (!resize) throw new Error("Resize handle is missing");
 		const originalWidth = objects[0]?.width ?? 0;
 		await page.mouse.move(
@@ -436,6 +463,68 @@ test("controlled board selection and dragging do not loop", async () => {
 		await page.getByLabel("Zoom level").waitFor();
 		expect(await page.getByLabel("Zoom level").textContent()).toBe("1%");
 		expect(errors).toEqual([]);
+
+		const touchPage = await browser.newPage({
+			hasTouch: true,
+			viewport: { width: 1024, height: 768 },
+		});
+		touchPage.setDefaultTimeout(4000);
+		await touchPage.goto(`${server.url}board/${boardId}`);
+		const touchNode = touchPage.locator(
+			`[data-testid="rf__node-${firstObject.id}"]`,
+		);
+		await touchNode.tap({ position: { x: 25, y: 25 } });
+		await touchPage
+			.getByRole("menuitem", { name: "Highlight connections", exact: true })
+			.waitFor();
+		await touchPage.keyboard.press("Escape");
+		await touchPage.getByRole("menu").waitFor({ state: "hidden" });
+		const touchBounds = await touchNode.boundingBox();
+		if (!touchBounds) throw new Error("Missing touch node");
+		const session = await touchPage.context().newCDPSession(touchPage);
+		const touchStart = { x: touchBounds.x + 25, y: touchBounds.y + 25 };
+		await session.send("Input.dispatchTouchEvent", {
+			type: "touchStart",
+			touchPoints: [touchStart],
+		});
+		expect(await touchPage.getByRole("menu").count()).toBe(0);
+		await session.send("Input.dispatchTouchEvent", {
+			type: "touchMove",
+			touchPoints: [{ x: touchStart.x + 10, y: touchStart.y + 5 }],
+		});
+		await session.send("Input.dispatchTouchEvent", {
+			type: "touchMove",
+			touchPoints: [{ x: touchStart.x + 60, y: touchStart.y + 30 }],
+		});
+		await session.send("Input.dispatchTouchEvent", {
+			type: "touchMove",
+			touchPoints: [{ x: touchStart.x + 120, y: touchStart.y + 60 }],
+		});
+		const touchSaved = touchPage.waitForResponse((response) =>
+			response.url().endsWith("/snapshot"),
+		);
+		await session.send("Input.dispatchTouchEvent", {
+			type: "touchEnd",
+			touchPoints: [],
+		});
+		await touchSaved;
+		await touchPage.waitForFunction(
+			({ id, x }) =>
+				(document
+					.querySelector(`[data-testid="rf__node-${id}"]`)
+					?.getBoundingClientRect().x ?? 0) >
+				x + 40,
+			{ id: firstObject.id, x: touchBounds.x },
+		);
+		expect(await touchPage.getByRole("menu").count()).toBe(0);
+		expect((await touchNode.boundingBox())?.x).toBeGreaterThan(
+			touchBounds.x + 40,
+		);
+		await touchNode.tap({ position: { x: 25, y: 25 } });
+		await touchPage
+			.getByRole("menuitem", { name: "Edit", exact: true })
+			.waitFor();
+		await touchPage.close();
 	} finally {
 		await browser.close();
 		await server.stop(true);

@@ -84,3 +84,17 @@
     @apply bg-background text-foreground;
   }
 }
+
+.react-flow__node.board-connection-muted,
+.react-flow__edge.board-connection-muted {
+  opacity: 0.18;
+}
+
+.react-flow__node.board-connection-highlight .board-object {
+  outline: 2px solid var(--primary);
+  outline-offset: 4px;
+}
+
+.react-flow__edge.board-connection-highlight .react-flow__edge-path {
+  stroke-width: 4;
+}
