@@ -1589,6 +1589,7 @@ export function BoardView({
 			)}
 			{plainEditing ? (
 				<ObjectEditor
+					key={plainEditing.id}
 					object={plainEditing}
 					cancel={() => setPlainEditing(null)}
 					save={async (patch) => {

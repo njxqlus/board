@@ -197,7 +197,7 @@ const ObjectNode = memo(function ObjectNode({
 				) : null}
 				{kind === "sticky" ? (
 					<div className="board-sticky" style={{ background: fill }}>
-						{String(value.label ?? "")}
+						<RichTextView content={value.label} />
 					</div>
 				) : null}
 				{kind === "card" ? (
@@ -210,7 +210,7 @@ const ObjectNode = memo(function ObjectNode({
 						}}
 					>
 						<strong>{String(value.title ?? value.label ?? "Card")}</strong>
-						<p>{String(value.body ?? "")}</p>
+						<RichTextView content={value.body} />
 					</div>
 				) : null}
 				{kind === "text" || kind === "table" ? (

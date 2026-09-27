@@ -1,4 +1,5 @@
 import type { BoardObjectInput } from "./board-schema";
+import { toRichTextDocument } from "./rich-text";
 
 export function defaultObject(
 	kind: string,
@@ -71,7 +72,7 @@ export function defaultObject(
 				...base,
 				height: 200,
 				kind,
-				data: { label: "Double-click to write" },
+				data: { label: toRichTextDocument("Double-click to write") },
 				style: { fill: "#fff1a8", textColor: "#1e293b" },
 			};
 		case "card":
@@ -80,7 +81,10 @@ export function defaultObject(
 				width: 260,
 				height: 180,
 				kind,
-				data: { title: "Card title", body: "Double-click to edit" },
+				data: {
+					title: "Card title",
+					body: toRichTextDocument("Double-click to edit"),
+				},
 			};
 		case "frame":
 			return {

@@ -216,7 +216,7 @@ export const objectInputSchema = z.discriminatedUnion("kind", [
 		kind: z.enum(["shape", "sticky", "card", "frame", "group"]),
 		data: z
 			.object({
-				label: z.string().max(LIMITS.text).optional(),
+				label: z.union([z.string().max(LIMITS.text), richText]).optional(),
 				shape: z
 					.enum([
 						"rectangle",
@@ -229,7 +229,7 @@ export const objectInputSchema = z.discriminatedUnion("kind", [
 					])
 					.optional(),
 				title: z.string().max(500).optional(),
-				body: z.string().max(LIMITS.text).optional(),
+				body: z.union([z.string().max(LIMITS.text), richText]).optional(),
 			})
 			.default({}),
 	}),

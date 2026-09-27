@@ -1,5 +1,6 @@
 import type { JSONContent } from "@tiptap/react";
 import { type CSSProperties, createElement, type ReactNode } from "react";
+import { toRichTextDocument } from "@/shared/rich-text";
 
 // Render a small allowlist as React elements, never trusted HTML or DOM attributes.
 function render(node: JSONContent, key: string): ReactNode {
@@ -79,11 +80,10 @@ function render(node: JSONContent, key: string): ReactNode {
 }
 
 export function RichTextView({ content }: { content: unknown }) {
+	const document = toRichTextDocument(content);
 	return (
 		<div className="board-rich-text">
-			{content && typeof content === "object"
-				? render(content as JSONContent, "doc")
-				: null}
+			{render(document as JSONContent, "doc")}
 		</div>
 	);
 }

@@ -18,19 +18,34 @@ import {
 	Rows3,
 	Underline,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import {
+	forwardRef,
+	useEffect,
+	useImperativeHandle,
+	useRef,
+	useState,
+} from "react";
 import { Button } from "@/components/ui/button";
+import type { RichTextDocument } from "@/shared/rich-text";
 import { ToolButton } from "./BoardTools";
 
-type Props = {
-	content: Record<string, unknown>;
+type RichTextInputProps = {
+	content: RichTextDocument;
 	table?: boolean;
-	onSave: (content: Record<string, unknown>) => void | Promise<void>;
-	onCancel: () => void;
+	ariaLabel?: string;
+	id?: string;
 };
-export function RichTextEditor({ content, table, onSave, onCancel }: Props) {
-	const dialog = useRef<HTMLDialogElement>(null);
-	const [pending, setPending] = useState(false);
+export type RichTextInputHandle = {
+	getJSON: () => RichTextDocument;
+};
+
+export const RichTextInput = forwardRef<
+	RichTextInputHandle,
+	RichTextInputProps
+>(function RichTextInput(
+	{ content, table = false, ariaLabel = "Text content", id },
+	ref,
+) {
 	const editor = useEditor({
 		extensions: [
 			StarterKit.configure({
@@ -52,16 +67,24 @@ export function RichTextEditor({ content, table, onSave, onCancel }: Props) {
 		content,
 		editorProps: {
 			attributes: {
+				...(id ? { id } : {}),
 				class:
 					"board-editor-content min-h-40 rounded-md border bg-background p-3 outline-none",
-				"aria-label": table ? "Table content" : "Text content",
+				"aria-label": ariaLabel,
 			},
 		},
 	});
+	useImperativeHandle(
+		ref,
+		() => ({
+			getJSON: () =>
+				(editor?.getJSON() as RichTextDocument | undefined) ?? content,
+		}),
+		[content, editor],
+	);
 	useEffect(() => {
-		if (!editor) return;
-		dialog.current?.showModal();
 		if (
+			editor &&
 			table &&
 			!editor.getJSON().content?.some((node) => node.type === "table")
 		)
@@ -142,6 +165,80 @@ export function RichTextEditor({ content, table, onSave, onCancel }: Props) {
 		},
 	];
 	return (
+		<>
+			<div
+				role="toolbar"
+				className="flex flex-wrap items-center gap-1"
+				aria-label="Text formatting"
+			>
+				{[...formatting, ...(table ? tableActions : [])].map(
+					({ label, icon, action }) => (
+						<ToolButton
+							key={label}
+							label={label}
+							icon={icon}
+							onMouseDown={(event) => event.preventDefault()}
+							onClick={action}
+						/>
+					),
+				)}
+				<input
+					type="color"
+					aria-label="Text color"
+					onInput={(event) =>
+						editor.chain().focus().setColor(event.currentTarget.value).run()
+					}
+				/>
+				<select
+					aria-label="Text size"
+					defaultValue=""
+					onChange={(event) => {
+						if (event.target.value)
+							editor.chain().focus().setFontSize(event.target.value).run();
+					}}
+				>
+					<option value="">Text size</option>
+					<option value="12px">Small</option>
+					<option value="16px">Medium</option>
+					<option value="24px">Large</option>
+				</select>
+				<ToolButton
+					label="Link"
+					icon={Link}
+					onMouseDown={(event) => event.preventDefault()}
+					onClick={() => {
+						const href = window
+							.prompt("Paste an http(s) or mailto link")
+							?.trim();
+						if (!href) return;
+						try {
+							if (
+								["https:", "http:", "mailto:"].includes(new URL(href).protocol)
+							)
+								editor.chain().focus().setLink({ href }).run();
+						} catch {}
+					}}
+				/>
+			</div>
+			<EditorContent editor={editor} />
+		</>
+	);
+});
+
+type Props = {
+	content: RichTextDocument;
+	table?: boolean;
+	onSave: (content: Record<string, unknown>) => void | Promise<void>;
+	onCancel: () => void;
+};
+export function RichTextEditor({ content, table, onSave, onCancel }: Props) {
+	const dialog = useRef<HTMLDialogElement>(null);
+	const input = useRef<RichTextInputHandle>(null);
+	const [pending, setPending] = useState(false);
+	useEffect(() => {
+		dialog.current?.showModal();
+	}, []);
+	return (
 		<dialog
 			ref={dialog}
 			onCancel={onCancel}
@@ -152,63 +249,12 @@ export function RichTextEditor({ content, table, onSave, onCancel }: Props) {
 				<h2 id="rich-editor-title" className="text-lg font-semibold">
 					{table ? "Edit table" : "Edit text"}
 				</h2>
-				<div
-					role="toolbar"
-					className="flex flex-wrap items-center gap-1"
-					aria-label="Text formatting"
-				>
-					{[...formatting, ...(table ? tableActions : [])].map(
-						({ label, icon, action }) => (
-							<ToolButton
-								key={label}
-								label={label}
-								icon={icon}
-								onMouseDown={(event) => event.preventDefault()}
-								onClick={action}
-							/>
-						),
-					)}
-					<input
-						type="color"
-						aria-label="Text color"
-						onInput={(event) =>
-							editor.chain().focus().setColor(event.currentTarget.value).run()
-						}
-					/>
-					<select
-						aria-label="Text size"
-						defaultValue=""
-						onChange={(event) => {
-							if (event.target.value)
-								editor.chain().focus().setFontSize(event.target.value).run();
-						}}
-					>
-						<option value="">Text size</option>
-						<option value="12px">Small</option>
-						<option value="16px">Medium</option>
-						<option value="24px">Large</option>
-					</select>
-					<ToolButton
-						label="Link"
-						icon={Link}
-						onMouseDown={(event) => event.preventDefault()}
-						onClick={() => {
-							const href = window
-								.prompt("Paste an http(s) or mailto link")
-								?.trim();
-							if (!href) return;
-							try {
-								if (
-									["https:", "http:", "mailto:"].includes(
-										new URL(href).protocol,
-									)
-								)
-									editor.chain().focus().setLink({ href }).run();
-							} catch {}
-						}}
-					/>
-				</div>
-				<EditorContent editor={editor} />
+				<RichTextInput
+					ref={input}
+					content={content}
+					table={table}
+					ariaLabel={table ? "Table content" : "Text content"}
+				/>
 				<div className="flex justify-end gap-2">
 					<Button type="button" variant="outline" onClick={onCancel}>
 						Cancel
@@ -219,7 +265,7 @@ export function RichTextEditor({ content, table, onSave, onCancel }: Props) {
 						onClick={async () => {
 							setPending(true);
 							try {
-								await onSave(editor.getJSON() as Record<string, unknown>);
+								await onSave(input.current?.getJSON() ?? content);
 							} finally {
 								setPending(false);
 							}

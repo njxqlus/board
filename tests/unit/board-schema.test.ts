@@ -141,3 +141,28 @@ test("accepts allowed structured text and rejects unsafe links", () => {
 		}),
 	).toBe(false);
 });
+
+test("accepts rich text in card bodies and sticky notes", () => {
+	const content = {
+		type: "doc",
+		content: [
+			{
+				type: "paragraph",
+				content: [{ type: "text", text: "Formatted note" }],
+			},
+		],
+	};
+	for (const value of [
+		{ kind: "card", data: { title: "Card", body: content } },
+		{ kind: "sticky", data: { label: content } },
+	])
+		expect(
+			objectInputSchema.safeParse({
+				...value,
+				x: 0,
+				y: 0,
+				width: 200,
+				height: 140,
+			}).success,
+		).toBe(true);
+});
