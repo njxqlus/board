@@ -69,6 +69,7 @@ import {
 	DropdownMenuShortcut,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import {
 	Popover,
 	PopoverContent,
@@ -81,7 +82,7 @@ import {
 	TooltipContent,
 	TooltipTrigger,
 } from "@/components/ui/tooltip";
-import type { ObjectRow } from "./types";
+import type { ConnectorRow, ObjectRow } from "./types";
 
 export type CanvasTool = "select" | "hand" | "connect" | "pen" | "comment";
 export function CanvasControls() {
@@ -710,5 +711,56 @@ export function SelectionTools({
 				</DropdownMenuContent>
 			</DropdownMenu>
 		</NodeToolbar>
+	);
+}
+
+export function ConnectorTools({
+	selected,
+	saveLabel,
+	remove,
+}: {
+	selected: ConnectorRow[];
+	saveLabel: (label: string) => void;
+	remove: () => void;
+}) {
+	const connector = selected.length === 1 ? selected[0] : undefined;
+	const label = connector?.data.label ?? "";
+	const [draft, setDraft] = useState(label);
+	useEffect(() => setDraft(label), [label, connector?.id]);
+	if (!selected.length) return null;
+	return (
+		<Panel
+			position="top-center"
+			className="board-selection-tools board-connector-tools nodrag nopan"
+			aria-label="Selected connector tools"
+		>
+			{connector ? (
+				<form
+					className="flex min-w-0 flex-1 items-center gap-2"
+					onSubmit={(event) => {
+						event.preventDefault();
+						saveLabel(draft);
+					}}
+				>
+					<Input
+						aria-label="Connector label"
+						placeholder="Connector label"
+						value={draft}
+						onChange={(event) => setDraft(event.currentTarget.value)}
+					/>
+					<Button type="submit" size="sm" disabled={draft === label}>
+						Save
+					</Button>
+				</form>
+			) : (
+				<span className="px-2 text-sm">
+					{selected.length} connectors selected
+				</span>
+			)}
+			<Button type="button" size="sm" variant="destructive" onClick={remove}>
+				<Trash2 data-icon="inline-start" aria-hidden="true" />
+				Delete
+			</Button>
+		</Panel>
 	);
 }

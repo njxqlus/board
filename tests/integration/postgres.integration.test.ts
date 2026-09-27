@@ -231,7 +231,11 @@ test.skipIf(!databaseUrl)(
 						expectedVersion: 1,
 						patch: {
 							label: "Updated connector",
-							target: { kind: "free", point: { x: 320, y: 40 } },
+							target: {
+								kind: "attached",
+								objectId: duplicateId,
+								anchor: { x: 1, y: 0.5 },
+							},
 						},
 					},
 				],
@@ -243,7 +247,7 @@ test.skipIf(!databaseUrl)(
 			)[0];
 			expect(connector?.data).toMatchObject({
 				label: "Updated connector",
-				target: { kind: "free" },
+				target: { kind: "attached", objectId: duplicateId },
 			});
 			const styledId = randomUUID();
 			await command({ id: userId, email: "owner@example.test" }, boardId, {

@@ -97,7 +97,7 @@ export function createMcpServer(
 								"audio",
 								"youtube",
 							],
-							endpointKinds: ["attached", "free"],
+							endpointKinds: ["attached"],
 							objectSchema: z.toJSONSchema(objectInputSchema, { io: "input" }),
 							connectorSchema: z.toJSONSchema(connectorInputSchema, {
 								io: "input",
@@ -816,7 +816,8 @@ export function createMcpServer(
 	server.registerTool(
 		"connectors_create",
 		{
-			description: "Create canonical free or attached connectors.",
+			description:
+				"Create connectors between two existing board objects. Free-floating endpoints are not supported.",
 			inputSchema: {
 				boardId: z.uuid(),
 				connectors: z.array(connectorInputSchema).min(1).max(100),

@@ -39,10 +39,18 @@ test("accepts a single-line header and bounded size", () => {
 		}),
 	).toThrow();
 });
-test("accepts a bounded free connector", () => {
+test("requires connector endpoints to be attached to objects", () => {
 	const connector = connectorInputSchema.parse({
-		source: { kind: "free", point: { x: 0, y: 0 } },
-		target: { kind: "free", point: { x: 1, y: 1 } },
+		source: {
+			kind: "attached",
+			objectId: "00000000-0000-4000-8000-000000000001",
+			anchor: { x: 1, y: 0.5 },
+		},
+		target: {
+			kind: "attached",
+			objectId: "00000000-0000-4000-8000-000000000002",
+			anchor: { x: 0, y: 0.5 },
+		},
 		style: {
 			path: "bezier",
 			stroke: "#112233",
@@ -50,13 +58,12 @@ test("accepts a bounded free connector", () => {
 			markerEnd: "closed-arrow",
 		},
 	});
-	expect(connector.source.kind).toBe("free");
+	expect(connector.source.kind).toBe("attached");
 	expect(connector.style?.path).toBe("bezier");
 	expect(() =>
 		connectorInputSchema.parse({
 			source: { kind: "free", point: { x: 0, y: 0 } },
 			target: { kind: "free", point: { x: 1, y: 1 } },
-			style: { path: "teleport" },
 		}),
 	).toThrow();
 });

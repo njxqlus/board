@@ -272,17 +272,14 @@ export const objectInputSchema = z.discriminatedUnion("kind", [
 	}),
 ]);
 export type BoardObjectInput = z.infer<typeof objectInputSchema>;
-export const endpointSchema = z.discriminatedUnion("kind", [
-	z.object({ kind: z.literal("free"), point: pointSchema }),
-	z.object({
-		kind: z.literal("attached"),
-		objectId: z.uuid(),
-		anchor: z.object({
-			x: z.number().min(0).max(1),
-			y: z.number().min(0).max(1),
-		}),
+export const endpointSchema = z.object({
+	kind: z.literal("attached"),
+	objectId: z.uuid(),
+	anchor: z.object({
+		x: z.number().min(0).max(1),
+		y: z.number().min(0).max(1),
 	}),
-]);
+});
 export const connectorInputSchema = z.object({
 	id: z.uuid().optional(),
 	source: endpointSchema,

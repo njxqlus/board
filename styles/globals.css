@@ -98,3 +98,8 @@
 .react-flow__edge.board-connection-highlight .react-flow__edge-path {
   stroke-width: 4;
 }
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--primary) !important;
+  stroke-width: 4 !important;
+}

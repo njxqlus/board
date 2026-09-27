@@ -126,6 +126,9 @@ button[aria-disabled="true"] {
 .board-selection-tools input[type="range"] {
 	width: 80px;
 }
+.board-connector-tools {
+	width: min(480px, calc(100vw - 32px));
+}
 .board-color-input input {
 	width: 28px;
 	height: 28px;

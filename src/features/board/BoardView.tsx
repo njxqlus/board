@@ -23,6 +23,7 @@ import {
 	BoardHeader,
 	CanvasControls,
 	type CanvasTool,
+	ConnectorTools,
 	CreationTools,
 	SelectionTools,
 } from "./BoardTools";
@@ -169,6 +170,14 @@ export function BoardView({
 	}, [projectedNodes]);
 	const projectedEdges = useMemo(() => projectEdges(connectors), [connectors]);
 	const [edges, setEdges] = useState<Edge[]>([]);
+	const selectedEdges = useMemo(
+		() => edges.filter((edge) => edge.selected),
+		[edges],
+	);
+	const selectedConnectors = useMemo(() => {
+		const ids = new Set(selectedEdges.map((edge) => edge.id));
+		return connectors.filter((connector) => ids.has(connector.id));
+	}, [connectors, selectedEdges]);
 	const menuObject = objects.find((object) => object.id === nodeMenu?.id);
 	const activeHighlight = objects.some((object) => object.id === highlightedId)
 		? highlightedId
@@ -224,7 +233,15 @@ export function BoardView({
 		window.addEventListener("keydown", dismiss);
 		return () => window.removeEventListener("keydown", dismiss);
 	}, []);
-	useEffect(() => setEdges(projectedEdges), [projectedEdges]);
+	useEffect(() => {
+		setEdges((current) => {
+			const byId = new Map(current.map((edge) => [edge.id, edge]));
+			return projectedEdges.map((edge) => ({
+				...edge,
+				selected: byId.get(edge.id)?.selected ?? false,
+			}));
+		});
+	}, [projectedEdges]);
 	const latestRevision = useRef(-1n);
 	const load = useCallback(async () => {
 		try {
@@ -1651,77 +1668,94 @@ export function BoardView({
 							>
 								<Background gap={18} />
 								{boardState === "active" && !nodeMenu ? (
-									<SelectionTools
-										selected={selectedObjects}
-										style={styleSelection}
-										copy={copySelection}
-										duplicate={() =>
-											duplicate(
-												selectedObjects.map((object) => ({
-													id: object.id,
-													expectedVersion: object.version,
-												})),
-											)
-										}
-										group={() => groupSelection()}
-										canGroup={
-											selectedIds.length >= 2 &&
-											!selectedObjects.some((object) =>
-												Boolean(
-													object.parentId && groupIds.has(object.parentId),
-												),
-											)
-										}
-										ungroup={() => {
-											const selectedGroupIds = new Set(
-												selectedObjects
-													.filter(
-														(object) =>
-															object.kind === "group" ||
-															Boolean(
-																object.parentId &&
-																	groupIds.has(object.parentId),
-															),
-													)
-													.map((object) =>
-														object.kind === "group"
-															? object.id
-															: object.parentId,
-													)
-													.filter((id): id is string => Boolean(id)),
-											);
-											deleteNodes(
-												nodes.filter((node) => selectedGroupIds.has(node.id)),
-											);
-										}}
-										canUngroup={selectedObjects.some(
-											(object) =>
-												object.kind === "group" ||
-												Boolean(
-													object.parentId && groupIds.has(object.parentId),
-												),
-										)}
-										stack={stackSelection}
-										align={alignSelection}
-										distribute={distributeSelection}
-										remove={() =>
-											deleteNodes(
-												nodes.filter((node) => selectedIds.includes(node.id)),
-											)
-										}
-										edit={() => {
-											if (selectedObjects[0]) editObject(selectedObjects[0]);
-										}}
-										replace={startReplacement}
-										highlighted={activeHighlight === selectedObjects[0]?.id}
-										highlight={() =>
-											setHighlightedId(
-												activeHighlight === selectedObjects[0]?.id
-													? null
-													: (selectedObjects[0]?.id ?? null),
-											)
-										}
-									/>
+									<>
+										<SelectionTools
+											selected={selectedObjects}
+											style={styleSelection}
+											copy={copySelection}
+											duplicate={() =>
+												duplicate(
+													selectedObjects.map((object) => ({
+														id: object.id,
+														expectedVersion: object.version,
+													})),
+												)
+											}
+											group={() => groupSelection()}
+											canGroup={
+												selectedIds.length >= 2 &&
+												!selectedObjects.some((object) =>
+													Boolean(
+														object.parentId && groupIds.has(object.parentId),
+													),
+												)
+											}
+											ungroup={() => {
+												const selectedGroupIds = new Set(
+													selectedObjects
+														.filter(
+															(object) =>
+																object.kind === "group" ||
+																Boolean(
+																	object.parentId &&
+																		groupIds.has(object.parentId),
+																),
+														)
+														.map((object) =>
+															object.kind === "group"
+																? object.id
+																: object.parentId,
+														)
+														.filter((id): id is string => Boolean(id)),
+												);
+												deleteNodes(
+													nodes.filter((node) => selectedGroupIds.has(node.id)),
+												);
+											}}
+											canUngroup={selectedObjects.some(
+												(object) =>
+													object.kind === "group" ||
+													Boolean(
+														object.parentId && groupIds.has(object.parentId),
+													),
+											)}
+											stack={stackSelection}
+											align={alignSelection}
+											distribute={distributeSelection}
+											remove={() =>
+												deleteNodes(
+													nodes.filter((node) => selectedIds.includes(node.id)),
+												)
+											}
+											edit={() => {
+												if (selectedObjects[0]) editObject(selectedObjects[0]);
+											}}
+											replace={startReplacement}
+											highlighted={activeHighlight === selectedObjects[0]?.id}
+											highlight={() =>
+												setHighlightedId(
+													activeHighlight === selectedObjects[0]?.id
+														? null
+														: (selectedObjects[0]?.id ?? null),
+												)
+											}
+										/>
+										<ConnectorTools
+											selected={selectedConnectors}
+											saveLabel={(label) => {
+												const connector = selectedConnectors[0];
+												if (!connector) return;
+												void updateConnectorsWithHistory([
+													{
+														id: connector.id,
+														expectedVersion: connector.version,
+														patch: { label },
+													},
+												]);
+											}}
+											remove={() => deleteEdges(selectedEdges)}
+										/>
+									</>
 								) : null}
 								<CanvasControls />
 								{minimap ? (
