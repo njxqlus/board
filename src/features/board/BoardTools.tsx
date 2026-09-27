@@ -1,4 +1,10 @@
-import { Panel, useReactFlow, useViewport } from "@xyflow/react";
+import {
+	NodeToolbar,
+	Panel,
+	Position,
+	useReactFlow,
+	useViewport,
+} from "@xyflow/react";
 import {
 	AlignHorizontalDistributeCenter,
 	AlignHorizontalJustifyStart,
@@ -13,7 +19,9 @@ import {
 	Copy,
 	CopyPlus,
 	Diamond,
+	Ellipsis,
 	Frame,
+	GitBranch,
 	Grid2X2,
 	Group,
 	Hand,
@@ -23,6 +31,7 @@ import {
 	Map as MapIcon,
 	MessageCircle,
 	MousePointer2,
+	Palette,
 	PanelTop,
 	Pencil,
 	RectangleHorizontal,
@@ -31,6 +40,7 @@ import {
 	Scan,
 	SendToBack,
 	Settings,
+	SlidersHorizontal,
 	Square,
 	StickyNote,
 	Table2,
@@ -51,8 +61,19 @@ import {
 } from "react";
 import { Button } from "@/components/ui/button";
 import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuGroup,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuShortcut,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
 	Popover,
 	PopoverContent,
+	PopoverHeader,
+	PopoverTitle,
 	PopoverTrigger,
 } from "@/components/ui/popover";
 import {
@@ -393,6 +414,8 @@ export function SelectionTools({
 	remove,
 	edit,
 	replace,
+	highlight,
+	highlighted,
 }: {
 	selected: ObjectRow[];
 	style: (patch: Record<string, unknown>) => void;
@@ -408,151 +431,284 @@ export function SelectionTools({
 	remove: () => void;
 	edit: () => void;
 	replace: () => void;
+	highlight: () => void;
+	highlighted: boolean;
 }) {
+	const { y: viewportY, zoom } = useViewport();
 	if (!selected.length) return null;
 	const current = (selected[0]?.data.style ?? {}) as Record<string, unknown>;
+	const selectionTop = Math.min(...selected.map((object) => object.y));
 	return (
-		<section
-			className="board-selection-tools"
+		<NodeToolbar
+			nodeId={selected.map((object) => object.id)}
+			isVisible
+			position={
+				selectionTop * zoom + viewportY < 64 ? Position.Bottom : Position.Top
+			}
+			offset={12}
+			className="board-selection-tools nodrag nopan"
 			aria-label="Selected object tools"
 		>
-			<ToolButton
-				icon={Pencil}
-				label="Edit object"
-				onClick={edit}
-				disabled={selected.length !== 1}
-				disabledReason="Select one object"
-			/>
-			<ToolButton icon={Copy} label="Copy (Cmd/Ctrl+C)" onClick={copy} />
+			{selected.length === 1 ? (
+				<ToolButton icon={Pencil} label="Edit object" onClick={edit} />
+			) : null}
 			<ToolButton
 				icon={CopyPlus}
 				label="Duplicate (Cmd/Ctrl+D)"
 				onClick={duplicate}
 			/>
-			<ToolButton
-				icon={Group}
-				label="Group objects"
-				onClick={group}
-				disabled={!canGroup}
-				disabledReason={
-					selected.some((object) => object.parentId)
-						? "Ungroup objects before grouping again"
-						: "Select at least two objects"
-				}
-			/>
-			<ToolButton
-				icon={Ungroup}
-				label="Ungroup"
-				onClick={ungroup}
-				disabled={!canUngroup}
-				disabledReason="Select an object in a group"
-			/>
-			<ToolButton
-				icon={BringToFront}
-				label="Bring forward"
-				onClick={() => stack(1)}
-			/>
-			<ToolButton
-				icon={SendToBack}
-				label="Send backward"
-				onClick={() => stack(-1)}
-			/>
-			<ToolButton
-				icon={AlignHorizontalJustifyStart}
-				label="Align left"
-				onClick={() => align("x", "start")}
-				disabled={selected.length < 2}
-				disabledReason="Select at least two objects"
-			/>
-			<ToolButton
-				icon={AlignVerticalJustifyStart}
-				label="Align top"
-				onClick={() => align("y", "start")}
-				disabled={selected.length < 2}
-				disabledReason="Select at least two objects"
-			/>
-			<ToolButton
-				icon={AlignHorizontalDistributeCenter}
-				label="Distribute horizontally"
-				onClick={() => distribute("x")}
-				disabled={selected.length < 3}
-				disabledReason="Select at least three objects"
-			/>
-			<ToolButton
-				icon={AlignVerticalDistributeCenter}
-				label="Distribute vertically"
-				onClick={() => distribute("y")}
-				disabled={selected.length < 3}
-				disabledReason="Select at least three objects"
-			/>
-			<label title="Fill color" className="board-color-input">
-				<span>Fill</span>
-				<input
-					aria-label="Object fill"
-					type="color"
-					value={String(current.fill ?? "#ffffff")}
-					onChange={(event) => style({ fill: event.currentTarget.value })}
-				/>
-			</label>
-			<label title="Line color" className="board-color-input">
-				<span>Line</span>
-				<input
-					aria-label="Object stroke"
-					type="color"
-					value={String(current.stroke ?? "#94a3b8")}
-					onChange={(event) => style({ stroke: event.currentTarget.value })}
-				/>
-			</label>
-			<label
-				className="flex items-center gap-2 text-xs"
-				title="Line width in board pixels"
-			>
-				Width
-				<select
-					aria-label="Line width"
-					value={Number(
-						current.strokeWidth ??
-							(selected[0]?.kind === "freehand"
-								? (selected[0]?.data.width ?? 3)
-								: 1.5),
-					)}
-					onChange={(event) =>
-						style({ strokeWidth: Number(event.currentTarget.value) })
+			{selected.length === 1 ? (
+				<ToolButton
+					icon={GitBranch}
+					label={
+						highlighted ? "Clear connection highlight" : "Highlight connections"
 					}
-					className="h-8 rounded-md border bg-background px-2"
-				>
-					{[1, 1.5, 2, 3, 4, 6, 8, 12].map((width) => (
-						<option key={width} value={width}>
-							{width} px
-						</option>
-					))}
-				</select>
-			</label>
-			<label className="flex items-center gap-2 text-xs">
-				Opacity
-				<input
-					key={`${selected.map((object) => object.id).join(":")}:${current.opacity}`}
-					aria-label="Object opacity"
-					type="range"
-					min="0"
-					max="1"
-					step="0.1"
-					defaultValue={Number(current.opacity ?? 1)}
-					onPointerUp={(event) =>
-						style({ opacity: Number(event.currentTarget.value) })
-					}
-					onKeyUp={(event) => {
-						if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key))
-							style({ opacity: Number(event.currentTarget.value) });
-					}}
+					active={highlighted}
+					onClick={highlight}
 				/>
-			</label>
-			{selected.some((object) =>
-				["image", "video", "audio"].includes(object.kind),
-			) ? (
-				<ToolButton icon={Replace} label="Replace media" onClick={replace} />
 			) : null}
-			<ToolButton icon={Trash2} label="Delete selection" onClick={remove} />
-		</section>
+			<Popover>
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<PopoverTrigger asChild>
+							<Button
+								type="button"
+								size="icon"
+								variant="ghost"
+								aria-label="Style"
+							>
+								<Palette data-icon="inline-start" aria-hidden="true" />
+							</Button>
+						</PopoverTrigger>
+					</TooltipTrigger>
+					<TooltipContent side="bottom" sideOffset={6}>
+						Style
+					</TooltipContent>
+				</Tooltip>
+				<PopoverContent side="top" className="w-64" collisionPadding={12}>
+					<PopoverHeader>
+						<PopoverTitle>Style</PopoverTitle>
+					</PopoverHeader>
+					<div className="mt-3 flex flex-col gap-3">
+						<div className="flex gap-4">
+							<label title="Fill color" className="board-color-input">
+								<span>Fill</span>
+								<input
+									aria-label="Object fill"
+									type="color"
+									value={String(current.fill ?? "#ffffff")}
+									onChange={(event) =>
+										style({ fill: event.currentTarget.value })
+									}
+								/>
+							</label>
+							<label title="Line color" className="board-color-input">
+								<span>Line</span>
+								<input
+									aria-label="Object stroke"
+									type="color"
+									value={String(current.stroke ?? "#94a3b8")}
+									onChange={(event) =>
+										style({ stroke: event.currentTarget.value })
+									}
+								/>
+							</label>
+						</div>
+						<label
+							className="flex items-center justify-between gap-2 text-xs"
+							title="Line width in board pixels"
+						>
+							Width
+							<select
+								aria-label="Line width"
+								value={Number(
+									current.strokeWidth ??
+										(selected[0]?.kind === "freehand"
+											? (selected[0]?.data.width ?? 3)
+											: 1.5),
+								)}
+								onChange={(event) =>
+									style({ strokeWidth: Number(event.currentTarget.value) })
+								}
+								className="h-8 rounded-md border bg-background px-2"
+							>
+								{[1, 1.5, 2, 3, 4, 6, 8, 12].map((width) => (
+									<option key={width} value={width}>
+										{width} px
+									</option>
+								))}
+							</select>
+						</label>
+						<label className="flex items-center justify-between gap-2 text-xs">
+							Opacity
+							<input
+								key={`${selected.map((object) => object.id).join(":")}:${current.opacity}`}
+								aria-label="Object opacity"
+								type="range"
+								min="0"
+								max="1"
+								step="0.1"
+								defaultValue={Number(current.opacity ?? 1)}
+								onPointerUp={(event) =>
+									style({ opacity: Number(event.currentTarget.value) })
+								}
+								onKeyUp={(event) => {
+									if (
+										["ArrowLeft", "ArrowRight", "Home", "End"].includes(
+											event.key,
+										)
+									)
+										style({ opacity: Number(event.currentTarget.value) });
+								}}
+							/>
+						</label>
+					</div>
+				</PopoverContent>
+			</Popover>
+			<DropdownMenu>
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<DropdownMenuTrigger asChild>
+							<Button
+								type="button"
+								size="icon"
+								variant="ghost"
+								aria-label="Arrange"
+							>
+								<SlidersHorizontal
+									data-icon="inline-start"
+									aria-hidden="true"
+								/>
+							</Button>
+						</DropdownMenuTrigger>
+					</TooltipTrigger>
+					<TooltipContent side="bottom" sideOffset={6}>
+						Arrange
+					</TooltipContent>
+				</Tooltip>
+				<DropdownMenuContent align="center">
+					<DropdownMenuGroup>
+						<DropdownMenuItem disabled={!canGroup} onSelect={group}>
+							<Group aria-hidden="true" />
+							Group
+						</DropdownMenuItem>
+						<DropdownMenuItem disabled={!canUngroup} onSelect={ungroup}>
+							<Ungroup aria-hidden="true" />
+							Ungroup
+						</DropdownMenuItem>
+					</DropdownMenuGroup>
+					<DropdownMenuSeparator />
+					<DropdownMenuGroup>
+						<DropdownMenuItem onSelect={() => stack(1)}>
+							<BringToFront aria-hidden="true" />
+							Bring Forward
+						</DropdownMenuItem>
+						<DropdownMenuItem onSelect={() => stack(-1)}>
+							<SendToBack aria-hidden="true" />
+							Send Backward
+						</DropdownMenuItem>
+					</DropdownMenuGroup>
+				</DropdownMenuContent>
+			</DropdownMenu>
+			<DropdownMenu>
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<DropdownMenuTrigger asChild>
+							<Button
+								type="button"
+								size="icon"
+								variant="ghost"
+								aria-label="Align and distribute"
+							>
+								<AlignHorizontalJustifyStart
+									data-icon="inline-start"
+									aria-hidden="true"
+								/>
+							</Button>
+						</DropdownMenuTrigger>
+					</TooltipTrigger>
+					<TooltipContent side="bottom" sideOffset={6}>
+						Align &amp; Distribute
+					</TooltipContent>
+				</Tooltip>
+				<DropdownMenuContent align="center">
+					<DropdownMenuGroup>
+						<DropdownMenuItem
+							disabled={selected.length < 2}
+							onSelect={() => align("x", "start")}
+						>
+							<AlignHorizontalJustifyStart aria-hidden="true" />
+							Align Left
+						</DropdownMenuItem>
+						<DropdownMenuItem
+							disabled={selected.length < 2}
+							onSelect={() => align("y", "start")}
+						>
+							<AlignVerticalJustifyStart aria-hidden="true" />
+							Align Top
+						</DropdownMenuItem>
+					</DropdownMenuGroup>
+					<DropdownMenuSeparator />
+					<DropdownMenuGroup>
+						<DropdownMenuItem
+							disabled={selected.length < 3}
+							onSelect={() => distribute("x")}
+						>
+							<AlignHorizontalDistributeCenter aria-hidden="true" />
+							Distribute Horizontally
+						</DropdownMenuItem>
+						<DropdownMenuItem
+							disabled={selected.length < 3}
+							onSelect={() => distribute("y")}
+						>
+							<AlignVerticalDistributeCenter aria-hidden="true" />
+							Distribute Vertically
+						</DropdownMenuItem>
+					</DropdownMenuGroup>
+				</DropdownMenuContent>
+			</DropdownMenu>
+			<DropdownMenu>
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<DropdownMenuTrigger asChild>
+							<Button
+								type="button"
+								size="icon"
+								variant="ghost"
+								aria-label="More actions"
+							>
+								<Ellipsis data-icon="inline-start" aria-hidden="true" />
+							</Button>
+						</DropdownMenuTrigger>
+					</TooltipTrigger>
+					<TooltipContent side="bottom" sideOffset={6}>
+						More
+					</TooltipContent>
+				</Tooltip>
+				<DropdownMenuContent align="end">
+					<DropdownMenuGroup>
+						<DropdownMenuItem onSelect={copy}>
+							<Copy aria-hidden="true" />
+							Copy<DropdownMenuShortcut>⌘C</DropdownMenuShortcut>
+						</DropdownMenuItem>
+						{selected.some((object) =>
+							["image", "video", "audio"].includes(object.kind),
+						) ? (
+							<DropdownMenuItem onSelect={replace}>
+								<Replace aria-hidden="true" />
+								Replace Media
+							</DropdownMenuItem>
+						) : null}
+					</DropdownMenuGroup>
+					<DropdownMenuSeparator />
+					<DropdownMenuGroup>
+						<DropdownMenuItem variant="destructive" onSelect={remove}>
+							<Trash2 aria-hidden="true" />
+							Delete
+						</DropdownMenuItem>
+					</DropdownMenuGroup>
+				</DropdownMenuContent>
+			</DropdownMenu>
+		</NodeToolbar>
 	);
 }

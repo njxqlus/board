@@ -91,7 +91,6 @@ export function BoardView({
 	const [minimap, setMinimap] = useState(false);
 	const [nodeMenu, setNodeMenu] = useState<NodeMenuTarget | null>(null);
 	const [highlightedId, setHighlightedId] = useState<string | null>(null);
-	const nodeGestureDragged = useRef(false);
 	const [plainEditing, setPlainEditing] = useState<ObjectRow | null>(null);
 	const [objects, setObjects] = useState<ObjectRow[]>([]);
 	const [connectors, setConnectors] = useState<ConnectorRow[]>([]);
@@ -143,6 +142,10 @@ export function BoardView({
 	const selectedIds = useMemo(
 		() => nodes.filter((node) => node.selected).map((node) => node.id),
 		[nodes],
+	);
+	const selectedObjects = useMemo(
+		() => objects.filter((object) => selectedIds.includes(object.id)),
+		[objects, selectedIds],
 	);
 	const groupIds = useMemo(
 		() =>
@@ -1267,69 +1270,6 @@ export function BoardView({
 				setMinimap={setMinimap}
 				disabled={boardState !== "active"}
 			/>
-			{boardState === "active" ? (
-				<SelectionTools
-					selected={objects.filter((object) => selectedIds.includes(object.id))}
-					style={styleSelection}
-					copy={copySelection}
-					duplicate={() =>
-						duplicate(
-							objects
-								.filter((object) => selectedIds.includes(object.id))
-								.map((object) => ({
-									id: object.id,
-									expectedVersion: object.version,
-								})),
-						)
-					}
-					group={() => groupSelection()}
-					canGroup={
-						selectedIds.length >= 2 &&
-						!objects.some(
-							(object) =>
-								selectedIds.includes(object.id) &&
-								Boolean(object.parentId && groupIds.has(object.parentId)),
-						)
-					}
-					ungroup={() => {
-						const selectedGroupIds = new Set(
-							objects
-								.filter(
-									(object) =>
-										(object.kind === "group" &&
-											selectedIds.includes(object.id)) ||
-										(object.parentId != null &&
-											groupIds.has(object.parentId) &&
-											selectedIds.includes(object.id)),
-								)
-								.map((object) =>
-									object.kind === "group" ? object.id : object.parentId,
-								)
-								.filter((id): id is string => Boolean(id)),
-						);
-						deleteNodes(nodes.filter((node) => selectedGroupIds.has(node.id)));
-					}}
-					canUngroup={objects.some(
-						(object) =>
-							selectedIds.includes(object.id) &&
-							(object.kind === "group" ||
-								Boolean(object.parentId && groupIds.has(object.parentId))),
-					)}
-					stack={stackSelection}
-					align={alignSelection}
-					distribute={distributeSelection}
-					remove={() =>
-						deleteNodes(nodes.filter((node) => selectedIds.includes(node.id)))
-					}
-					edit={() => {
-						const object = objects.find((object) =>
-							selectedIds.includes(object.id),
-						);
-						if (object) editObject(object);
-					}}
-					replace={startReplacement}
-				/>
-			) : null}
 			<input
 				ref={uploadInput}
 				className="hidden"
@@ -1429,9 +1369,6 @@ export function BoardView({
 										y: bounds.y + bounds.height / 2,
 									});
 								}}
-								onPointerDownCapture={() => {
-									nodeGestureDragged.current = false;
-								}}
 								onPointerMove={(event) => {
 									if (
 										!(event.target as HTMLElement).closest(".react-flow__panel")
@@ -1455,7 +1392,6 @@ export function BoardView({
 								}
 								nodeTypes={nodeTypes}
 								onNodeDragStart={() => {
-									nodeGestureDragged.current = true;
 									setNodeMenu(null);
 								}}
 								onNodeDragStop={drag}
@@ -1477,22 +1413,6 @@ export function BoardView({
 								}}
 								onNodeClick={(event, node) => {
 									if (tool === "select") {
-										if (
-											nodeGestureDragged.current ||
-											event.shiftKey ||
-											event.metaKey ||
-											event.ctrlKey ||
-											(event.target as Element).closest(
-												".nodrag, .react-flow__handle, .react-flow__resize-control, button, a, input, textarea, select, video, audio, [contenteditable]",
-											)
-										)
-											return;
-										if (objects.some((object) => object.id === node.id))
-											setNodeMenu({
-												id: node.id,
-												x: event.clientX,
-												y: event.clientY,
-											});
 										return;
 									}
 									if (tool !== "comment") return;
@@ -1507,6 +1427,19 @@ export function BoardView({
 										node.id,
 									);
 								}}
+								onNodeContextMenu={(event, node) => {
+									if (
+										tool !== "select" ||
+										!objects.some((object) => object.id === node.id)
+									)
+										return;
+									event.preventDefault();
+									setNodeMenu({
+										id: node.id,
+										x: event.clientX,
+										y: event.clientY,
+									});
+								}}
 								minZoom={0.01}
 								onMoveStart={() => setNodeMenu(null)}
 								defaultViewport={viewport}
@@ -1520,6 +1453,79 @@ export function BoardView({
 								panOnDrag={tool === "hand" ? true : [1, 2]}
 							>
 								<Background gap={18} />
+								{boardState === "active" && !nodeMenu ? (
+									<SelectionTools
+										selected={selectedObjects}
+										style={styleSelection}
+										copy={copySelection}
+										duplicate={() =>
+											duplicate(
+												selectedObjects.map((object) => ({
+													id: object.id,
+													expectedVersion: object.version,
+												})),
+											)
+										}
+										group={() => groupSelection()}
+										canGroup={
+											selectedIds.length >= 2 &&
+											!selectedObjects.some((object) =>
+												Boolean(
+													object.parentId && groupIds.has(object.parentId),
+												),
+											)
+										}
+										ungroup={() => {
+											const selectedGroupIds = new Set(
+												selectedObjects
+													.filter(
+														(object) =>
+															object.kind === "group" ||
+															Boolean(
+																object.parentId &&
+																	groupIds.has(object.parentId),
+															),
+													)
+													.map((object) =>
+														object.kind === "group"
+															? object.id
+															: object.parentId,
+													)
+													.filter((id): id is string => Boolean(id)),
+											);
+											deleteNodes(
+												nodes.filter((node) => selectedGroupIds.has(node.id)),
+											);
+										}}
+										canUngroup={selectedObjects.some(
+											(object) =>
+												object.kind === "group" ||
+												Boolean(
+													object.parentId && groupIds.has(object.parentId),
+												),
+										)}
+										stack={stackSelection}
+										align={alignSelection}
+										distribute={distributeSelection}
+										remove={() =>
+											deleteNodes(
+												nodes.filter((node) => selectedIds.includes(node.id)),
+											)
+										}
+										edit={() => {
+											if (selectedObjects[0]) editObject(selectedObjects[0]);
+										}}
+										replace={startReplacement}
+										highlighted={activeHighlight === selectedObjects[0]?.id}
+										highlight={() =>
+											setHighlightedId(
+												activeHighlight === selectedObjects[0]?.id
+													? null
+													: (selectedObjects[0]?.id ?? null),
+											)
+										}
+									/>
+								) : null}
 								<CanvasControls />
 								{minimap ? (
 									<MiniMap

@@ -110,18 +110,13 @@ button[aria-disabled="true"] {
 	padding-inline: 6px;
 }
 .board-selection-tools {
-	position: absolute;
 	z-index: 10;
-	top: 72px;
-	left: 84px;
-	right: 16px;
-	margin: 0 auto;
-	width: fit-content;
-	max-width: calc(100% - 100px);
 	display: flex;
 	align-items: center;
-	flex-wrap: wrap;
 	gap: 4px;
+	max-width: calc(100vw - 32px);
+	overflow-x: auto;
+	overscroll-behavior: contain;
 	padding: 6px;
 	border: 1px solid var(--border);
 	border-radius: 12px;
@@ -130,11 +125,6 @@ button[aria-disabled="true"] {
 }
 .board-selection-tools input[type="range"] {
 	width: 80px;
-}
-.board-workspace:has(.board-creation-tools[data-expanded="true"])
-	.board-selection-tools {
-	left: 236px;
-	max-width: calc(100% - 252px);
 }
 .board-color-input input {
 	width: 28px;
@@ -369,12 +359,6 @@ button[aria-disabled="true"] {
 }
 .board-object > .react-flow__resize-control {
 	z-index: 2;
-}
-@media (max-width: 640px) {
-	.board-workspace:has(.board-creation-tools[data-expanded="true"])
-		.board-selection-tools {
-		visibility: hidden;
-	}
 }
 .board-workspace .react-flow__node.selected {
 	outline: 2px solid #3b82f6;
