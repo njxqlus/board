@@ -142,7 +142,13 @@ export async function command(
 						"Object changed by a collaborator",
 						"VERSION_CONFLICT",
 					);
-				const patch = { ...current.data, ...raw.patch };
+				const unset = z
+					.array(z.string())
+					.max(50)
+					.parse(raw.patch.unset ?? []);
+				const { unset: _unset, ...patchFields } = raw.patch;
+				const patch = { ...current.data, ...patchFields };
+				for (const key of unset) delete patch[key];
 				const parsed = objectInputSchema.parse({
 					id: current.id,
 					kind: current.kind,
@@ -477,6 +483,10 @@ export async function command(
 					y: source.y + offset.y,
 					width: source.width,
 					height: source.height,
+					zIndex: source.z_index + 1,
+					parentId: source.parent_id
+						? (copiedIds.get(source.parent_id) ?? source.parent_id)
+						: null,
 					data: source.data,
 					version: 1,
 				});

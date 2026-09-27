@@ -192,14 +192,14 @@ export function BoardHeader({
 				label="Undo (Cmd/Ctrl+Z)"
 				onClick={undo}
 				disabled={!canUndo}
-				disabledReason="No movement to undo"
+				disabledReason="Nothing to undo"
 			/>
 			<ToolButton
 				icon={Redo2}
 				label="Redo (Cmd/Ctrl+Shift+Z)"
 				onClick={redo}
 				disabled={!canRedo}
-				disabledReason="No movement to redo"
+				disabledReason="Nothing to redo"
 			/>
 			<ToolButton icon={Settings} label="Settings" onClick={settings} />
 			{cursorLegend}

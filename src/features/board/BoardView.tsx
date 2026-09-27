@@ -35,6 +35,7 @@ import { PenLayer } from "./PenLayer";
 import { CursorLegend, CursorReporter, RemoteCursors } from "./Presence";
 import { RichTextEditor } from "./RichTextEditor";
 import type {
+	BoardCommand,
 	CommandResult,
 	CommentThread,
 	ConnectorRow,
@@ -415,71 +416,193 @@ export function BoardView({
 	};
 	const versions = (result: CommandResult) =>
 		new Map(result.upserts?.map((value) => [value.id, value.version]) ?? []);
+	const remember = (entry: HistoryEntry) => {
+		setUndoStack((stack) => [...stack.slice(-99), entry]);
+		setRedoStack([]);
+	};
+	const objectInput = (object: ObjectRow) => {
+		const { style, ...data } = object.data;
+		return {
+			id: object.id,
+			kind: object.kind,
+			x: object.x,
+			y: object.y,
+			width: object.width,
+			height: object.height,
+			zIndex: object.zIndex,
+			parentId: object.parentId ?? null,
+			data,
+			style,
+		};
+	};
+	const connectorInput = (connector: ConnectorRow) => ({
+		id: connector.id,
+		...connector.data,
+	});
+	const hydrateCommand = (
+		command: BoardCommand,
+		knownVersions: Map<string, number>,
+	): BoardCommand => {
+		const needsVersion =
+			command.type.endsWith(".update") ||
+			command.type.endsWith(".delete") ||
+			command.type === "objects.duplicate";
+		const changes = command.changes.map((raw) => {
+			if (!raw || typeof raw !== "object") return raw;
+			const change = { ...(raw as Record<string, unknown>) };
+			if (command.type === "objects.group") {
+				change.children = (
+					change.children as Array<Record<string, unknown>>
+				).map((child) => ({
+					...child,
+					expectedVersion:
+						knownVersions.get(String(child.id)) ??
+						objects.find((object) => object.id === child.id)?.version ??
+						child.expectedVersion,
+				}));
+				return change;
+			}
+			if (!needsVersion || typeof change.id !== "string") return change;
+			return {
+				...change,
+				expectedVersion:
+					knownVersions.get(change.id) ??
+					objects.find((object) => object.id === change.id)?.version ??
+					connectors.find((connector) => connector.id === change.id)?.version ??
+					change.expectedVersion,
+			};
+		});
+		return { ...command, changes };
+	};
+	const runHistory = async (commands: BoardCommand[]) => {
+		const knownVersions = new Map<string, number>();
+		for (const command of commands) {
+			if (!command.changes.length) continue;
+			const hydrated = hydrateCommand(command, knownVersions);
+			const result = await send(
+				hydrated.type,
+				hydrated.changes,
+				hydrated.confirmIrreversible,
+			);
+			if (!result) return false;
+			for (const [objectId, version] of versions(result))
+				knownVersions.set(objectId, version);
+		}
+		return true;
+	};
+	const previousPatches = (changes: VersionedPatch[]): VersionedPatch[] =>
+		changes.map((change) => {
+			const object = objects.find((value) => value.id === change.id);
+			const patch: Record<string, unknown> = {};
+			const unset: string[] = [];
+			for (const key of Object.keys(change.patch)) {
+				if (key === "zIndex") patch[key] = object?.zIndex ?? 0;
+				else if (key === "parentId") patch[key] = object?.parentId ?? null;
+				else if (["x", "y", "width", "height"].includes(key))
+					patch[key] = object?.[key as keyof ObjectRow];
+				else if (object && key in object.data) patch[key] = object.data[key];
+				else unset.push(key);
+			}
+			if (unset.length) patch.unset = unset;
+			return { ...change, patch };
+		});
 	const updateWithHistory = async (
 		changes: VersionedPatch[],
-		previous: Map<string, Record<string, unknown>>,
+		previous?: Map<string, Record<string, unknown>>,
 	) => {
-		if (!changes.length) return;
-		const result = await send("objects.update", changes);
-		if (!result) return;
-		const applied = versions(result);
-		setUndoStack((stack) => [
-			...stack,
-			{
-				undo: changes.map((change) => ({
+		if (!changes.length) return false;
+		const undoChanges = previous
+			? changes.map((change) => ({
 					...change,
-					expectedVersion: applied.get(change.id) ?? change.expectedVersion,
 					patch: previous.get(change.id) ?? {},
-				})),
-				redo: changes.map((change) => ({
-					...change,
-					expectedVersion: applied.get(change.id) ?? change.expectedVersion,
-				})),
-			},
-		]);
-		setRedoStack([]);
+				}))
+			: previousPatches(changes);
+		const result = await send("objects.update", changes);
+		if (!result) return false;
+		remember({
+			undo: [{ type: "objects.update", changes: undoChanges }],
+			redo: [{ type: "objects.update", changes }],
+		});
+		return true;
+	};
+	const createObjectsWithHistory = async (
+		inputs: Array<Record<string, unknown>>,
+	) => {
+		const changes = inputs.map((input) => ({
+			...input,
+			id: typeof input.id === "string" ? input.id : crypto.randomUUID(),
+		}));
+		const result = await send("objects.create", changes);
+		if (!result) return;
+		remember({
+			undo: [
+				{
+					type: "objects.delete",
+					changes: changes.map(({ id }) => ({ id })),
+				},
+			],
+			redo: [{ type: "objects.create", changes }],
+		});
+	};
+	const createConnectorsWithHistory = async (
+		inputs: Array<Record<string, unknown>>,
+	) => {
+		const changes = inputs.map((input) => ({
+			...input,
+			id: typeof input.id === "string" ? input.id : crypto.randomUUID(),
+		}));
+		const result = await send("connectors.create", changes);
+		if (!result) return;
+		remember({
+			undo: [
+				{
+					type: "connectors.delete",
+					changes: changes.map(({ id }) => ({ id })),
+				},
+			],
+			redo: [{ type: "connectors.create", changes }],
+		});
+	};
+	const updateConnectorsWithHistory = async (changes: VersionedPatch[]) => {
+		if (!changes.length) return;
+		const undoChanges = changes.map((change) => {
+			const connector = connectors.find((value) => value.id === change.id);
+			return {
+				...change,
+				patch: Object.fromEntries(
+					Object.keys(change.patch).map((key) => [
+						key,
+						connector?.data[key as keyof ConnectorRow["data"]],
+					]),
+				),
+			};
+		});
+		const result = await send("connectors.update", changes);
+		if (!result) return;
+		remember({
+			undo: [{ type: "connectors.update", changes: undoChanges }],
+			redo: [{ type: "connectors.update", changes }],
+		});
 	};
 	const undo = async () => {
 		const entry = undoStack.at(-1);
 		if (!entry) return;
-		const result = await send("objects.update", entry.undo);
-		if (!result) {
-			setCollaborationNotice("Cannot undo because this object changed.");
+		if (!(await runHistory(entry.undo))) {
+			setCollaborationNotice("Cannot undo because the board changed.");
 			return;
 		}
-		const applied = versions(result);
 		setUndoStack((stack) => stack.slice(0, -1));
-		setRedoStack((stack) => [
-			...stack,
-			{
-				...entry,
-				redo: entry.redo.map((change) => ({
-					...change,
-					expectedVersion: applied.get(change.id) ?? change.expectedVersion,
-				})),
-			},
-		]);
+		setRedoStack((stack) => [...stack, entry]);
 	};
 	const redo = async () => {
 		const entry = redoStack.at(-1);
 		if (!entry) return;
-		const result = await send("objects.update", entry.redo);
-		if (!result) {
-			setCollaborationNotice("Cannot redo because this object changed.");
+		if (!(await runHistory(entry.redo))) {
+			setCollaborationNotice("Cannot redo because the board changed.");
 			return;
 		}
-		const applied = versions(result);
 		setRedoStack((stack) => stack.slice(0, -1));
-		setUndoStack((stack) => [
-			...stack,
-			{
-				...entry,
-				undo: entry.undo.map((change) => ({
-					...change,
-					expectedVersion: applied.get(change.id) ?? change.expectedVersion,
-				})),
-			},
-		]);
+		setUndoStack((stack) => [...stack, entry]);
 	};
 	const duplicate = (
 		targets: Array<{ id: string; expectedVersion: number }>,
@@ -492,8 +615,8 @@ export function BoardView({
 			const nonMedia = source.filter(
 				(object) => !["image", "video", "audio"].includes(object.kind),
 			);
-			if (nonMedia.length)
-				await send(
+			if (nonMedia.length) {
+				const result = await send(
 					"objects.duplicate",
 					nonMedia.map((object) => ({
 						id: object.id,
@@ -501,6 +624,37 @@ export function BoardView({
 						offset: { x: 24, y: 24 },
 					})),
 				);
+				if (result) {
+					const createdObjects = (result.upserts ?? []).filter(
+						(value) => typeof value.kind === "string",
+					) as unknown as ObjectRow[];
+					const createdConnectors = (result.upserts ?? []).filter(
+						(value) => value.source && value.target,
+					) as unknown as Array<ConnectorRow["data"] & { id: string }>;
+					remember({
+						undo: [
+							{
+								type: "connectors.delete",
+								changes: createdConnectors.map(({ id }) => ({ id })),
+							},
+							{
+								type: "objects.delete",
+								changes: createdObjects.map(({ id }) => ({ id })),
+							},
+						],
+						redo: [
+							{
+								type: "objects.create",
+								changes: createdObjects.map(objectInput),
+							},
+							{
+								type: "connectors.create",
+								changes: createdConnectors,
+							},
+						],
+					});
+				}
+			}
 			for (const object of source.filter((value) =>
 				["image", "video", "audio"].includes(value.kind),
 			)) {
@@ -536,8 +690,7 @@ export function BoardView({
 		);
 	};
 	const stackSelection = (direction: -1 | 1) =>
-		void send(
-			"objects.update",
+		void updateWithHistory(
 			objects
 				.filter((object) => selectedIds.includes(object.id))
 				.map((object) => ({
@@ -613,10 +766,12 @@ export function BoardView({
 			new Map(moving.map((object) => [object.id, { [axis]: object[axis] }])),
 		);
 	};
-	const styleSelection = (patch: Record<string, unknown>) =>
-		void send(
-			"objects.update",
-			objects
+	const styleSelection = (patch: Record<string, unknown>) => {
+		const selected = objects.filter((object) =>
+			selectedIds.includes(object.id),
+		);
+		void updateWithHistory(
+			selected
 				.filter((object) => selectedIds.includes(object.id))
 				.map((object) => ({
 					id: object.id,
@@ -629,7 +784,14 @@ export function BoardView({
 						},
 					},
 				})),
+			new Map(
+				selected.map((object) => [
+					object.id,
+					{ style: object.data.style ?? {} },
+				]),
+			),
 		);
+	};
 	useEffect(() => {
 		const onKeyDown = (event: KeyboardEvent) => {
 			const target = event.target as HTMLElement | null;
@@ -700,31 +862,38 @@ export function BoardView({
 					]
 				: selected;
 		if (!children.length) {
-			void send("objects.create", [defaultObject(kind, placement())]);
+			void createObjectsWithHistory([defaultObject(kind, placement())]);
 			return;
 		}
 		const left = Math.min(...children.map((child) => child.x));
 		const top = Math.min(...children.map((child) => child.y));
 		const right = Math.max(...children.map((child) => child.x + child.width));
 		const bottom = Math.max(...children.map((child) => child.y + child.height));
-		void send("objects.group", [
-			{
-				group: {
-					id: crypto.randomUUID(),
-					kind,
-					zIndex: -1,
-					x: left - 24,
-					y: top - 24,
-					width: right - left + 48,
-					height: bottom - top + 48,
-					data: kind === "frame" ? { label: "Frame" } : {},
-				},
-				children: children.map((child) => ({
-					id: child.id,
-					expectedVersion: child.version,
-				})),
-			},
-		]);
+		const group = {
+			id: crypto.randomUUID(),
+			kind,
+			zIndex: -1,
+			x: left - 24,
+			y: top - 24,
+			width: right - left + 48,
+			height: bottom - top + 48,
+			data: kind === "frame" ? { label: "Frame" } : {},
+		};
+		const request = {
+			group,
+			children: children.map((child) => ({
+				id: child.id,
+				expectedVersion: child.version,
+			})),
+		};
+		void (async () => {
+			const result = await send("objects.group", [request]);
+			if (result)
+				remember({
+					undo: [{ type: "objects.delete", changes: [{ id: group.id }] }],
+					redo: [{ type: "objects.group", changes: [request] }],
+				});
+		})();
 	};
 
 	const placement = () => {
@@ -745,14 +914,14 @@ export function BoardView({
 		const object = defaultObject(kind, placement());
 		object.x -= object.width / 2;
 		object.y -= object.height / 2;
-		void send("objects.create", [object]);
+		void createObjectsWithHistory([object]);
 	};
 	const addShape = (shape: string) => {
 		setTool("select");
 		const object = defaultObject("shape", placement());
 		object.x -= object.width / 2;
 		object.y -= object.height / 2;
-		void send("objects.create", [
+		void createObjectsWithHistory([
 			{
 				...object,
 				width: shape === "circle" || shape === "square" ? 160 : 200,
@@ -833,7 +1002,7 @@ export function BoardView({
 			window.prompt("Paste a YouTube URL") ?? "",
 		);
 		if (!videoId || !/^[A-Za-z0-9_-]{11}$/.test(videoId)) return;
-		void send("objects.create", [
+		void createObjectsWithHistory([
 			{
 				kind: "youtube",
 				x: objects.length * 30,
@@ -892,34 +1061,11 @@ export function BoardView({
 			...new Map(changes.map((change) => [change.id, change])).values(),
 		];
 		if (!uniqueChanges.length) return;
-		const result = await send("objects.update", uniqueChanges);
-		if (!result) {
-			await load();
-			return;
-		}
-		const applied = versions(result);
-		setUndoStack((stack) => [
-			...stack,
-			{
-				undo: uniqueChanges.map((change) => {
-					const previous = objects.find((object) => object.id === change.id);
-					return {
-						...change,
-						expectedVersion: applied.get(change.id) ?? change.expectedVersion,
-						patch: { x: previous?.x, y: previous?.y },
-					};
-				}),
-				redo: uniqueChanges.map((change) => ({
-					...change,
-					expectedVersion: applied.get(change.id) ?? change.expectedVersion,
-				})),
-			},
-		]);
-		setRedoStack([]);
+		await updateWithHistory(uniqueChanges);
 	};
 	const connect: OnConnect = (connection) => {
 		if (!connection.source || !connection.target) return;
-		void send("connectors.create", [
+		void createConnectorsWithHistory([
 			{
 				source: {
 					kind: "attached",
@@ -964,7 +1110,7 @@ export function BoardView({
 				),
 			};
 		};
-		void send("connectors.update", [
+		void updateConnectorsWithHistory([
 			{
 				id: connector.id,
 				expectedVersion: connector.version,
@@ -1141,27 +1287,76 @@ export function BoardView({
 			)
 		)
 			return;
-		void send(
-			"objects.delete",
-			selected.map((object) => ({
-				id: object.id,
-				expectedVersion: object.version,
-			})),
-			hasMedia,
-		);
+		const changes = selected.map((object) => ({
+			id: object.id,
+			expectedVersion: object.version,
+		}));
+		void (async () => {
+			const result = await send("objects.delete", changes, hasMedia);
+			if (!result || hasMedia) return;
+			const selectedIds = new Set(selected.map((object) => object.id));
+			const detached = objects.filter(
+				(object) => object.parentId && selectedIds.has(object.parentId),
+			);
+			const relatedConnectors = connectors.filter((connector) =>
+				[connector.data.source, connector.data.target].some(
+					(endpoint) =>
+						endpoint?.kind === "attached" && selectedIds.has(endpoint.objectId),
+				),
+			);
+			remember({
+				undo: [
+					{
+						type: "objects.create",
+						changes: selected
+							.toSorted(
+								(a, b) =>
+									Number(Boolean(a.parentId)) - Number(Boolean(b.parentId)),
+							)
+							.map(objectInput),
+					},
+					...(detached.length
+						? [
+								{
+									type: "objects.update",
+									changes: detached.map((object) => ({
+										id: object.id,
+										patch: { parentId: object.parentId },
+									})),
+								},
+							]
+						: []),
+					{
+						type: "connectors.create",
+						changes: relatedConnectors.map(connectorInput),
+					},
+				],
+				redo: [{ type: "objects.delete", changes }],
+			});
+		})();
 	};
 	const deleteEdges = (edgesToDelete: Edge[]) => {
 		const selected = connectors.filter((connector) =>
 			edgesToDelete.some((edge) => edge.id === connector.id),
 		);
 		if (!selected.length) return;
-		void send(
-			"connectors.delete",
-			selected.map((connector) => ({
-				id: connector.id,
-				expectedVersion: connector.version,
-			})),
-		);
+		const changes = selected.map((connector) => ({
+			id: connector.id,
+			expectedVersion: connector.version,
+		}));
+		void (async () => {
+			const result = await send("connectors.delete", changes);
+			if (result)
+				remember({
+					undo: [
+						{
+							type: "connectors.create",
+							changes: selected.map(connectorInput),
+						},
+					],
+					redo: [{ type: "connectors.delete", changes }],
+				});
+		})();
 	};
 	const rename = async () => {
 		const response = await fetch(`/api/boards/${id}/rename`, {
@@ -1307,7 +1502,9 @@ export function BoardView({
 								flow.current?.screenToFlowPosition(point) ?? point
 							}
 							save={(stroke) => {
-								void send("objects.create", [{ ...stroke, kind: "freehand" }]);
+								void createObjectsWithHistory([
+									{ ...stroke, kind: "freehand" },
+								]);
 							}}
 						/>
 					) : null}
@@ -1316,7 +1513,7 @@ export function BoardView({
 							resize: (objectId, geometry) => {
 								const object = objects.find((value) => value.id === objectId);
 								if (object)
-									void send("objects.update", [
+									void updateWithHistory([
 										{
 											id: object.id,
 											expectedVersion: object.version,
@@ -1573,7 +1770,7 @@ export function BoardView({
 								])
 							}
 							detach={() => {
-								void send("objects.update", [
+								void updateWithHistory([
 									{
 										id: menuObject.id,
 										expectedVersion: menuObject.version,
@@ -1599,7 +1796,7 @@ export function BoardView({
 					object={plainEditing}
 					cancel={() => setPlainEditing(null)}
 					save={async (patch) => {
-						const result = await send("objects.update", [
+						const result = await updateWithHistory([
 							{
 								id: plainEditing.id,
 								expectedVersion: plainEditing.version,
@@ -1624,7 +1821,7 @@ export function BoardView({
 						setEditing(null);
 					}}
 					onSave={async (content) => {
-						const result = await send("objects.update", [
+						const result = await updateWithHistory([
 							{
 								id: editing.id,
 								expectedVersion: editing.version,

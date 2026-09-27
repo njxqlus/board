@@ -71,7 +71,12 @@ export type VersionedPatch = {
 	expectedVersion: number;
 	patch: Record<string, unknown>;
 };
-export type HistoryEntry = { undo: VersionedPatch[]; redo: VersionedPatch[] };
+export type BoardCommand = {
+	type: string;
+	changes: unknown[];
+	confirmIrreversible?: boolean;
+};
+export type HistoryEntry = { undo: BoardCommand[]; redo: BoardCommand[] };
 export type CommandResult = {
-	upserts?: Array<{ id: string; version: number }>;
+	upserts?: Array<Record<string, unknown> & { id: string; version: number }>;
 };
