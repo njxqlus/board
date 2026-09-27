@@ -103,6 +103,8 @@ const ObjectNode = memo(function ObjectNode({
 		updateInternals(id);
 	}, [id, anchorKey, updateInternals]);
 	const value = data.data as Record<string, unknown>;
+	const cardTitle =
+		typeof value.title === "string" && value.title.trim() ? value.title : null;
 	const style = (value.style ?? {}) as Record<string, unknown>;
 	const kind = String(data.kind);
 	const shape = String(value.shape ?? "rectangle");
@@ -209,7 +211,7 @@ const ObjectNode = memo(function ObjectNode({
 							borderWidth: strokeWidth,
 						}}
 					>
-						<strong>{String(value.title ?? value.label ?? "Card")}</strong>
+						{cardTitle ? <strong>{cardTitle}</strong> : null}
 						<RichTextView content={value.body} />
 					</div>
 				) : null}

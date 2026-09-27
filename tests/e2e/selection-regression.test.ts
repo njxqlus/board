@@ -30,6 +30,13 @@ test("controlled board selection and dragging do not loop", async () => {
 		id: "00000000-0000-4000-8000-000000000003",
 		x: 500,
 	});
+	objects.push({
+		...firstObject,
+		data: { body: "Body without title" },
+		id: "00000000-0000-4000-8000-000000000004",
+		kind: "card",
+		x: 800,
+	});
 	const server = Bun.serve({
 		port: 0,
 		async fetch(req) {
@@ -120,6 +127,9 @@ test("controlled board selection and dragging do not loop", async () => {
 		await page.goto(`${server.url}board/${boardId}`);
 		const node = page.locator(".react-flow__node").first();
 		await node.waitFor();
+		const untitledCard = page.locator(".board-card");
+		expect(await untitledCard.locator("strong").count()).toBe(0);
+		expect(await untitledCard.textContent()).toBe("Body without title");
 		expect(await page.getByLabel("Zoom level").textContent()).toBe("100%");
 		await node.click();
 		expect(await node.getAttribute("class")).toContain("selected");
@@ -180,14 +190,14 @@ test("controlled board selection and dragging do not loop", async () => {
 				document.querySelector<HTMLElement>(".board-object-visual")?.style
 					.opacity === "0.4",
 		);
-		expect(await page.locator(".react-flow__node").count()).toBe(2);
+		expect(await page.locator(".react-flow__node").count()).toBe(3);
 		expect(await node.isVisible()).toBe(true);
 		expect(await page.locator(".react-flow__node").nth(1).isVisible()).toBe(
 			true,
 		);
 		await page.reload();
 		await node.waitFor();
-		expect(await page.locator(".react-flow__node").count()).toBe(2);
+		expect(await page.locator(".react-flow__node").count()).toBe(3);
 
 		expect(await page.locator(".react-flow__attribution").count()).toBe(0);
 		expect(await page.locator(".board-object [data-kind]").count()).toBe(0);
